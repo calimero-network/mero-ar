@@ -1,9 +1,9 @@
-# CI for Mero AR. Mirror into .github/workflows/ to enable on GitHub.
+# CI for Mero AR.
 name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
 
 jobs:
@@ -19,12 +19,14 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
           components: clippy
+      - name: Install cargo-mero
+        uses: ./.github/actions/install-cargo-mero
       - run: cargo test
       - run: cargo clippy --target wasm32-unknown-unknown --profile app-release -- -D warnings
-      - name: Build WASM
-        run: |
-          sudo apt-get update && sudo apt-get install -y jq
-          bash build.sh
+      # `cargo mero build` also emits + embeds the ABI, so a public type missing
+      # an `AbiType` impl fails here rather than at bundle time.
+      - name: Build WASM (+ ABI embed)
+        run: cargo mero build
 
   merokit:
     name: MeroKit (Swift)
@@ -62,8 +64,10 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - run: sudo apt-get update && sudo apt-get install -y jq
+      - name: Install cargo-mero
+        uses: ./.github/actions/install-cargo-mero
       - name: Build WASM
-        run: cd logic && bash build.sh
+        run: cd logic && cargo mero build
       - name: Install merobox
         run: pipx install merobox || pip install merobox
       - name: Run merobox workflows (boots merod in Docker)

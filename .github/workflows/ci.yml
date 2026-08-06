@@ -30,7 +30,7 @@ jobs:
 
   merokit:
     name: MeroKit (Swift)
-    runs-on: macos-14
+    runs-on: macos-15
     defaults:
       run:
         working-directory: app/MeroKit
@@ -41,7 +41,7 @@ jobs:
 
   app:
     name: iOS app build
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - run: brew install xcodegen
@@ -51,7 +51,7 @@ jobs:
         name: Build + run app unit tests
         run: |
           xcodebuild test -project MeroAR.xcodeproj -scheme MeroAR \
-            -destination 'platform=iOS Simulator,name=iPhone 17' \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
             -derivedDataPath .build -only-testing:MeroARTests \
             CODE_SIGNING_ALLOWED=NO
 

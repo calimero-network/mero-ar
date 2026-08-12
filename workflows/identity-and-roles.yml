@@ -141,6 +141,20 @@ steps:
       - "contains({{members_on_node_1}}, 'Bob')"
       - "is_set({{bob_member_id}})"
 
+  # Node 1 enters the room as well, so the roster at the end has both people and
+  # both roles. Deliberately after the read above, which relies on Bob being the
+  # only member so far.
+  - name: Node 1 Joins As Alice
+    type: call
+    node: calimero-node-1
+    context_id: "{{context_id}}"
+    executor_public_key: "{{member_public_key}}"
+    method: join
+    args:
+      username: "Alice"
+      avatar: null
+      timestamp: 1000001
+
   - name: Bob's Role Before Any Grant
     type: call
     node: calimero-node-2

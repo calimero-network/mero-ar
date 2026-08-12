@@ -14,6 +14,12 @@ description: >
   has seen, which is what node 2's `join` registers — that bridge is the reason
   the `accounts` map exists.
 
+  Note how Bob's member id is obtained: from the contract's own roster, not from
+  a `create_identity` call. In a namespace-backed context the member identity is
+  the one the join materialises from group membership, so a freshly generated key
+  is NOT what `env::device_id()` reports — an earlier version of this workflow
+  granted to that key and the grant correctly refused to name an unknown account.
+
 stop_all_nodes: true
 restart: false
 wait_timeout: 120
@@ -57,12 +63,6 @@ steps:
       context_id: contextId
       member_public_key: memberPublicKey
 
-  - name: Create Identity on Node 2
-    type: create_identity
-    node: calimero-node-2
-    outputs:
-      public_key_2: publicKey
-
   - name: Invite Node 2
     type: create_group_invitation
     node: calimero-node-1
@@ -94,7 +94,6 @@ steps:
     type: call
     node: calimero-node-2
     context_id: "{{context_id}}"
-    executor_public_key: "{{public_key_2}}"
     method: join
     args:
       username: "Bob"
@@ -126,6 +125,11 @@ steps:
     args: {}
     outputs:
       members_on_node_1: result
+      # Bob's member id as the CONTRACT recorded it — `env::device_id()` of
+      # whatever identity node 2 signed with. Node 1 never joins here, so the
+      # roster is exactly one entry. This is also how the app names a member in a
+      # grant: it reads the id out of `list_roles`, never a key it made up.
+      bob_member_id: result.output.0.id
 
   # A gate that localizes the next failure. `join` writes the member entry and
   # the device→account pairing in ONE call, so node 1 seeing Bob here means it can
@@ -134,14 +138,13 @@ steps:
   - name: Assert Node 1 Sees Bob
     type: assert
     statements:
-      - "contains({{members_on_node_1}}, '{{public_key_2}}')"
       - "contains({{members_on_node_1}}, 'Bob')"
+      - "is_set({{bob_member_id}})"
 
   - name: Bob's Role Before Any Grant
     type: call
     node: calimero-node-2
     context_id: "{{context_id}}"
-    executor_public_key: "{{public_key_2}}"
     method: my_role
     args: {}
     outputs:
@@ -157,7 +160,6 @@ steps:
     type: call
     node: calimero-node-2
     context_id: "{{context_id}}"
-    executor_public_key: "{{public_key_2}}"
     method: add_object
     expected_failure: true
     args:
@@ -179,7 +181,6 @@ steps:
     type: call
     node: calimero-node-2
     context_id: "{{context_id}}"
-    executor_public_key: "{{public_key_2}}"
     method: get_objects
     args: {}
     outputs:
@@ -198,11 +199,10 @@ steps:
     type: call
     node: calimero-node-2
     context_id: "{{context_id}}"
-    executor_public_key: "{{public_key_2}}"
     method: grant_editor
     expected_failure: true
     args:
-      member: "{{public_key_2}}"
+      member: "{{bob_member_id}}"
 
   - name: Node 1 Grants Bob Editor
     type: call
@@ -211,7 +211,7 @@ steps:
     executor_public_key: "{{member_public_key}}"
     method: grant_editor
     args:
-      member: "{{public_key_2}}"
+      member: "{{bob_member_id}}"
 
   - name: Sync After Grant
     type: wait_for_sync
@@ -230,7 +230,6 @@ steps:
     type: call
     node: calimero-node-2
     context_id: "{{context_id}}"
-    executor_public_key: "{{public_key_2}}"
     method: my_role
     args: {}
     outputs:
@@ -245,7 +244,6 @@ steps:
     type: call
     node: calimero-node-2
     context_id: "{{context_id}}"
-    executor_public_key: "{{public_key_2}}"
     method: add_object
     args:
       object:
@@ -291,7 +289,7 @@ steps:
     type: assert
     statements:
       - "contains({{synced_objects}}, 'bob-cube')"
-      - "contains({{synced_objects}}, '{{public_key_2}}')"
+      - "contains({{synced_objects}}, '{{bob_member_id}}')"
       - "not_contains({{synced_objects}}, 'impersonatingalice')"
 
   # ── The advisory lock holds across identities ─────────────────────────────
@@ -323,7 +321,6 @@ steps:
     type: call
     node: calimero-node-2
     context_id: "{{context_id}}"
-    executor_public_key: "{{public_key_2}}"
     method: update_transform
     args:
       id: "bob-cube"
@@ -337,7 +334,6 @@ steps:
     type: call
     node: calimero-node-2
     context_id: "{{context_id}}"
-    executor_public_key: "{{public_key_2}}"
     method: get_object
     args:
       id: "bob-cube"
@@ -378,7 +374,6 @@ steps:
     type: call
     node: calimero-node-2
     context_id: "{{context_id}}"
-    executor_public_key: "{{public_key_2}}"
     method: lock_object
     args:
       id: "bob-cube"
@@ -445,7 +440,7 @@ steps:
     executor_public_key: "{{member_public_key}}"
     method: revoke_editor
     args:
-      member: "{{public_key_2}}"
+      member: "{{bob_member_id}}"
 
   - name: Sync After Revoke
     type: wait_for_sync
@@ -464,7 +459,6 @@ steps:
     type: call
     node: calimero-node-2
     context_id: "{{context_id}}"
-    executor_public_key: "{{public_key_2}}"
     method: my_role
     args: {}
     outputs:
@@ -479,7 +473,6 @@ steps:
     type: call
     node: calimero-node-2
     context_id: "{{context_id}}"
-    executor_public_key: "{{public_key_2}}"
     method: add_object
     expected_failure: true
     args:
@@ -502,7 +495,6 @@ steps:
     type: call
     node: calimero-node-2
     context_id: "{{context_id}}"
-    executor_public_key: "{{public_key_2}}"
     method: update_presence
     args:
       camera_position: { x: 0.0, y: 1.6, z: 0.0 }
@@ -535,7 +527,7 @@ steps:
   - name: Assert Viewer Is Present
     type: assert
     statements:
-      - "contains({{presence}}, '{{public_key_2}}')"
+      - "contains({{presence}}, '{{bob_member_id}}')"
 
   - name: Node 1 Reads The Roster
     type: call
@@ -551,6 +543,6 @@ steps:
     type: assert
     statements:
       - "contains({{roster}}, '{{member_public_key}}')"
-      - "contains({{roster}}, '{{public_key_2}}')"
+      - "contains({{roster}}, '{{bob_member_id}}')"
       - "contains({{roster}}, 'admin')"
       - "contains({{roster}}, 'viewer')"

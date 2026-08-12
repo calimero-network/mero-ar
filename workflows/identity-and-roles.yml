@@ -109,6 +109,34 @@ steps:
     check_interval: 2
     trigger_sync: true
 
+  # `wait_for_sync` compares `contextStateHash`, and it reported converged 160ms
+  # after Bob's write — before that delta could have reached node 1. So give
+  # propagation real time rather than trusting the hash comparison.
+  - name: Let Bob's Join Reach Node 1
+    type: wait
+    seconds: 20
+    message: "waiting for Bob's join (and his device→account pairing) to reach node 1"
+
+  - name: Node 1 Reads The Members
+    type: call
+    node: calimero-node-1
+    context_id: "{{context_id}}"
+    executor_public_key: "{{member_public_key}}"
+    method: get_members
+    args: {}
+    outputs:
+      members_on_node_1: result
+
+  # A gate that localizes the next failure. `join` writes the member entry and
+  # the device→account pairing in ONE call, so node 1 seeing Bob here means it can
+  # also name him in a grant. If this assertion is what fails, the problem is
+  # state propagation between the nodes — not the role logic below.
+  - name: Assert Node 1 Sees Bob
+    type: assert
+    statements:
+      - "contains({{members_on_node_1}}, '{{public_key_2}}')"
+      - "contains({{members_on_node_1}}, 'Bob')"
+
   - name: Bob's Role Before Any Grant
     type: call
     node: calimero-node-2
@@ -163,6 +191,19 @@ steps:
       - "not_contains({{after_denied}}, 'bob-denied')"
 
   # ── Admin grants the editor role ──────────────────────────────────────────
+  # `AccessControl::grant` calls `only_admin()` internally, so this is refused by
+  # the role registry itself — not by an app-level guard. Bob's account IS known
+  # here (his join registered it), so the refusal is about authority, not identity.
+  - name: Bob Tries To Promote Himself (should be rejected)
+    type: call
+    node: calimero-node-2
+    context_id: "{{context_id}}"
+    executor_public_key: "{{public_key_2}}"
+    method: grant_editor
+    expected_failure: true
+    args:
+      member: "{{public_key_2}}"
+
   - name: Node 1 Grants Bob Editor
     type: call
     node: calimero-node-1
@@ -179,6 +220,11 @@ steps:
     timeout: 60
     check_interval: 2
     trigger_sync: true
+
+  - name: Settle (Sync After Grant)
+    type: wait
+    seconds: 12
+    message: "waiting for the editor grant to reach node 2"
 
   - name: Bob's Role After Grant
     type: call
@@ -224,6 +270,11 @@ steps:
     check_interval: 2
     trigger_sync: true
 
+  - name: Settle (Sync After Bob's Object)
+    type: wait
+    seconds: 12
+    message: "waiting for Bob's object to reach node 1"
+
   - name: Node 1 Reads Bob's Object
     type: call
     node: calimero-node-1
@@ -260,6 +311,11 @@ steps:
     timeout: 60
     check_interval: 2
     trigger_sync: true
+
+  - name: Settle (Sync After Lock)
+    type: wait
+    seconds: 12
+    message: "waiting for node 1's lock to reach node 2"
 
   # Not an authorization failure — Bob is a legitimate editor — so the call
   # succeeds and the edit is dropped. The proof is that nothing moved.
@@ -313,6 +369,11 @@ steps:
     check_interval: 2
     trigger_sync: true
 
+  - name: Settle (Sync After Admin Unlock)
+    type: wait
+    seconds: 12
+    message: "waiting for the unlock to reach node 2"
+
   - name: Bob Takes The Lock
     type: call
     node: calimero-node-2
@@ -329,6 +390,11 @@ steps:
     timeout: 60
     check_interval: 2
     trigger_sync: true
+
+  - name: Settle (Sync After Bob's Lock)
+    type: wait
+    seconds: 12
+    message: "waiting for Bob's lock to reach node 1"
 
   - name: Admin Breaks Bob's Lock
     type: call
@@ -389,6 +455,11 @@ steps:
     check_interval: 2
     trigger_sync: true
 
+  - name: Settle (Sync After Revoke)
+    type: wait
+    seconds: 12
+    message: "waiting for the revoke to reach node 2"
+
   - name: Bob's Role After Revoke
     type: call
     node: calimero-node-2
@@ -445,6 +516,11 @@ steps:
     timeout: 60
     check_interval: 2
     trigger_sync: true
+
+  - name: Settle (Sync After Presence)
+    type: wait
+    seconds: 12
+    message: "waiting for Bob's presence to reach node 1"
 
   - name: Node 1 Reads Presence
     type: call

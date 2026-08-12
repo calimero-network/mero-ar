@@ -89,11 +89,18 @@ else
 fi
 
 step "Initialising node at $NODE_HOME"
-merod --node "$NODE_NAME" --home "$NODE_HOME" init \
+# The admin account is created HERE, not on first login: since core rc.20
+# `--auth-mode embedded` refuses to initialise without credentials (it wants the
+# admin to exist before the node ever listens), so a plain `init` fails with
+# "requires admin credentials". Passing the password on stdin keeps it out of the
+# process list.
+printf '%s' "$ADMIN_PASS" | merod --node "$NODE_NAME" --home "$NODE_HOME" init \
   --server-host 127.0.0.1 \
   --server-port "$NODE_PORT" \
   --swarm-port  "$NODE_P2P_PORT" \
-  --auth-mode embedded
+  --auth-mode embedded \
+  --admin-user "$ADMIN_USER" \
+  --admin-password-stdin
 green "Node initialised"
 
 CONFIG_FILE="$NODE_HOME/${NODE_NAME}/config.toml"

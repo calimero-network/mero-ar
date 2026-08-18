@@ -640,8 +640,10 @@ impl MeroAR {
     /// caller. Applies version-then-timestamp LWW so stale edits are dropped.
     pub fn update_transform(&mut self, id: String, transform: Transform, updated_at: u64) -> app::Result<()> {
         self.require_editor()?;
-        // The lock holder is a device key, and so is the caller — never a
-        // client-supplied "editor" string.
+        // The lock holder is an ACCOUNT, and so is the caller — never a
+        // client-supplied "editor" string. Keyed by account, the phone can
+        // release what the laptop took, which is what a person expects of
+        // their own lock.
         let editor = Self::caller_id();
         let next = self.bump_version();
         if let Ok(Some(mut obj)) = self.objects.get_mut(&id) {

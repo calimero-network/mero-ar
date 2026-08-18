@@ -36,7 +36,7 @@ steps:
       app_id: applicationId
 
   - name: Create Namespace
-    type: create_group
+    type: create_namespace
     node: calimero-node-1
     application_id: "{{app_id}}"
     outputs:

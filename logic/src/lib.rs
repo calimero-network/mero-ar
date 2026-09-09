@@ -40,8 +40,16 @@ use calimero_storage::collections::{
 };
 
 type ObjectId = String;
-/// A member, written the way `AccountId` renders: 64 hex characters. Never a
-/// bs58 key — those are 32 bytes too, so nothing downstream would object.
+/// A member, written the way `AccountId` renders: 64 hex characters.
+///
+/// ⚠️ Since core#3691 (0.11.0-rc.27) removed base58, there is exactly ONE id
+/// encoding — which makes an id harder to check, not easier: a DEVICE key and
+/// an ACCOUNT id are now both 64 hex, so `AccountId::from_str` accepts one in
+/// place of the other and nothing downstream objects. Passing a device key to
+/// `grant_editor` would authorize nobody, silently. What actually stops that is
+/// `AccessControl`, which refuses to grant to an account it has never seen —
+/// see the note at the top of `workflows/identity-and-roles.yml`, where an
+/// earlier version of that workflow made exactly this mistake.
 type MemberId = String;
 type CommentId = String;
 

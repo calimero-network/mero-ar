@@ -64,7 +64,7 @@ Because the app must sign as its own device, every RPC carries
 
 - ✅ WASM scene-graph contract (objects + transforms, presence, comments, locking, versioned LWW, world-map blob) — core rc.20, builds + unit-tested
 - ✅ rc.20 identity model: device-attributed writes, account-keyed roles, owner-gated room name, admin lock-breaking — covered by both merobox suites
-- ✅ App on the shared swift-sdk: login (incl. first-login setup code), Keychain session resume, live SSE, roles UI
+- ✅ App on the shared swift-sdk: login, Keychain session resume, live SSE, roles UI
 - ✅ ARKit/RealityKit room view: place/sync objects, camera-pose presence, publish + relocalize into a shared `ARWorldMap`
 - 🔵 Cross-device coordinate alignment via persisted `ARWorldMap` — needs on-device validation with two phones
 - ⬜ Spatial comments UI, shared-cursor avatars, lock UX, undo/redo (next tickets — see `../merointerier.md`)

@@ -100,8 +100,12 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y jq
       - name: Install cargo-mero
         uses: ./.github/actions/install-cargo-mero
-      - name: Build WASM
-        run: cd logic && cargo mero build
+      # A signed bundle, not just the wasm: since core#3652 (0.11.0-rc.31) the
+      # node refuses a raw .wasm on a dev install, which is what the workflow
+      # fixtures hand it. `scripts/workflows.sh` builds this too if it is
+      # missing; doing it here keeps the build failure in its own step.
+      - name: Build the .mpk bundle
+        run: cd logic && cargo mero bundle --dev --no-icon --app-version 0.0.0 --output res/mero-ar.mpk
       # merobox has had a console-verbosity knob since 0.6.30 (merobox#271): `quiet`
       # keeps the banners and the final pass/fail summary and drops the per-step
       # API-response dumps. Day to day that is what you want; to get the full detail

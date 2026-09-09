@@ -981,7 +981,7 @@ mod tests {
 
 #[cfg(test)]
 mod merge_tests {
-    use calimero_sdk::borsh::to_vec;
+    use calimero_sdk::borsh::{to_vec, BorshSerialize};
     use calimero_storage::collections::Mergeable;
 
     use super::{Member, ObjectData, Presence, Quat, SceneObject, SpatialComment, Transform, Vec3};
@@ -1015,14 +1015,17 @@ mod merge_tests {
         out
     }
 
-    fn bytes<T: calimero_sdk::borsh::BorshSerialize>(v: &T) -> Vec<u8> {
+    fn bytes<T: BorshSerialize>(v: &T) -> Vec<u8> {
         to_vec(v).expect("these records encode")
     }
 
     /// Merging both ways must reach the same value, or the two replicas have
     /// permanently disagreed. This is the property a bare `>` comparison broke
     /// at an exact clock tie.
-    fn assert_converges<T: Clone + Mergeable + core::fmt::Debug>(left: &T, right: &T) {
+    fn assert_converges<T: Clone + Mergeable + BorshSerialize + core::fmt::Debug>(
+        left: &T,
+        right: &T,
+    ) {
         let a = merged(left, right);
         let b = merged(right, left);
         assert_eq!(

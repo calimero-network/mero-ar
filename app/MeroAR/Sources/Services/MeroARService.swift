@@ -34,11 +34,31 @@ public final class MeroARService: @unchecked Sendable {
     /// owner against this.
     public let memberId: String
 
-    public init(relay: RelayClient, mero: Mero?, contextId: String, memberId: String) {
+    /// Signs a namespace invitation as the account (see ``InvitationMinter``),
+    /// or nil when this session cannot — no Cloud connection behind it.
+    let mintInvitation: InvitationMinter?
+
+    public init(
+        relay: RelayClient, mero: Mero?, contextId: String, memberId: String,
+        mintInvitation: InvitationMinter? = nil
+    ) {
         self.relay = relay
         self.mero = mero
         self.contextId = contextId
         self.memberId = memberId
+        self.mintInvitation = mintInvitation
+    }
+
+    /// Mints a signed invitation to a namespace id.
+    public typealias InvitationMinter = @Sendable (_ namespaceId: String) async throws -> SignedGroupOpenInvitation
+
+    /// The account-signed minter: ``CloudSignIn/createNamespaceInvitation(_:namespaceId:invitedRole:validForSeconds:)``
+    /// signs the invitation with this device's certificate key — the relay is
+    /// only read (members, group info, routing), never asked to mint. The
+    /// namespace's TEE relays are named as admitters, which is what lets an
+    /// invitee with no node of their own be admitted.
+    public static func cloudMinter(_ cloud: CloudSignIn, connection: CloudConnection) -> InvitationMinter {
+        { namespaceId in try await cloud.createNamespaceInvitation(connection, namespaceId: namespaceId) }
     }
 
     /// Whether live events and blob transfer are available on this session.
@@ -53,12 +73,14 @@ public final class MeroARService: @unchecked Sendable {
     /// first write failing later. `whoami` falls back to the signed-in account —
     /// the two are the same value whenever the relay executes as the author.
     public static func open(
-        relay: RelayClient, mero: Mero?, contextId: String, account: String
+        relay: RelayClient, mero: Mero?, contextId: String, account: String,
+        mintInvitation: InvitationMinter? = nil
     ) async throws -> MeroARService {
         _ = try await relay.describe(contextId)
         let member = (try? await relay.query(String.self, contextId: contextId, method: "whoami"))
             .flatMap { $0.isEmpty ? nil : $0 } ?? account.lowercased()
-        return MeroARService(relay: relay, mero: mero, contextId: contextId, memberId: member)
+        return MeroARService(
+            relay: relay, mero: mero, contextId: contextId, memberId: member, mintInvitation: mintInvitation)
     }
 
     // MARK: - Invitations
@@ -66,27 +88,16 @@ public final class MeroARService: @unchecked Sendable {
     /// Mint a shareable invitation to this room.
     ///
     /// The room lives in a namespace (its root group); the invitation is issued
-    /// against that namespace, and the context id rides along so the joiner can
-    /// enter the room directly instead of polling to see which context appeared.
+    /// against that namespace and **signed by the account on this device**
+    /// (``InvitationMinter``), not minted ad hoc by the relay. The context id
+    /// rides along so the joiner can enter the room directly instead of polling
+    /// to see which context appeared.
     public func createRoomInvite() async throws -> RoomInvite {
-        guard let mero else { throw MeroARError.readsUnavailable }
+        guard let mero, let mintInvitation else { throw MeroARError.readsUnavailable }
         guard let namespaceId = try await mero.admin.getContextGroup(contextId) else {
             throw MeroError.decoding("this room has no namespace to invite into")
         }
-        // Either shape: a plain namespace invitation, or a recursive one carrying
-        // an entry per group — take the entry for this namespace, or the first.
-        let result = try await mero.admin.createNamespaceInvitation(namespaceId)
-        let signed: SignedGroupOpenInvitation
-        switch result {
-        case .single(let data):
-            signed = data.invitation
-        case .recursive(let data):
-            let match = data.invitations.first { $0.groupId == namespaceId }
-            guard let entry = match ?? data.invitations.first else {
-                throw MeroError.decoding("the relay returned an invitation with no entries")
-            }
-            signed = entry.invitation
-        }
+        let signed = try await mintInvitation(namespaceId)
         let name = (try? await getRoom().name) ?? ""
         return RoomInvite(namespaceId: namespaceId, contextId: contextId, roomName: name, invitation: signed)
     }
@@ -339,6 +350,9 @@ func userMessage(_ error: Error) -> String {
     switch error {
     case AccountError.intentRefused(let reason, _, _):
         return reason
+    case AccountError.invitationNotClaimable:
+        return "Nobody could redeem an invite to this room yet: no relay that can admit people serves its space. "
+            + "Try again once the space is hosted in Calimero Cloud."
     case MeroError.rpc(let rpcError):
         return rpcError.message
     case MeroError.authRevoked:

@@ -45,12 +45,17 @@ Every contract call then goes through that relay:
 | Reads (`get_room`, `get_objects`, `my_role`…) | `RelayClient.query` with the relay's Bearer session |
 | World map blob | the relay's Bearer `Mero` — upload with `context_id`, download via `admin.getBlob(_:contextId:)` |
 | Live updates | SSE on the relay's Bearer session; the room polls if that session isn't up |
-| Invitations | minted on the relay (`createNamespaceInvitation`), redeemed with `CloudSignIn.join` |
+| Invitations | signed by the account on the device (`CloudSignIn.createNamespaceInvitation`, naming the space's relays as admitters), redeemed with `CloudSignIn.join` |
 
 Rooms are entered from the lobby by pasting an invite link (the fleet format,
 `links.calimero.network/com.calimero.mero-ar/join?invitation=…`) or a room ID
 the account is already in. A new account with no relay gets one by redeeming
 its first invitation.
+
+The app does not create rooms. A room is a context inside a space (namespace),
+created where the contract is deployed (`make node`, or the web build); the
+phone joins it. Founding a space from the phone (`CloudSignIn.foundNamespace`)
+would also need a context created in it, which is out of scope here.
 
 ### Building against an unmerged SDK
 

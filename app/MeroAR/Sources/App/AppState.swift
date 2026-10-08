@@ -120,7 +120,8 @@ public final class AppState: ObservableObject {
             }
             let service = try await MeroARService.open(
                 relay: relay, mero: connection.mero, contextId: contextId,
-                account: connection.session.account)
+                account: connection.session.account,
+                mintInvitation: MeroARService.cloudMinter(client.cloudSignIn, connection: connection))
             let store = SceneStore(service: service)
             let name = effectiveDisplayName
 

@@ -19,9 +19,10 @@ const T = {
   title: [0, 4],
   scan: [4, 11],
   build: [11, 22],
-  sync: [22, 29],
-  invite: [29, 36],
-  end: [36, 42],
+  room: [22, 31],
+  sync: [31, 38],
+  invite: [38, 45],
+  end: [45, 51],
 } as const;
 export const DURATION = s(T.end[1]);
 
@@ -416,6 +417,94 @@ const Build: React.FC = () => {
   );
 };
 
+/** A floor plan drawing itself, then rising into walls and furniture: an
+ *  illustration of a RoomPlan scan (labelled), not a recording. */
+const ScanIllustration: React.FC = () => {
+  const frame = useCurrentFrame();
+  const draw = interpolate(frame, [6, 70], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const rise = interpolate(frame, [70, 120], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.out(Easing.cubic) });
+  const tilt = 58 * rise;
+  const walls = 90 * rise;
+  return (
+    <div style={{ position: "relative", width: 520, height: 420, perspective: 1100 }}>
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          transform: `rotateX(${tilt}deg) rotateZ(${-24 * rise}deg)`,
+          transformStyle: "preserve-3d",
+          transformOrigin: "50% 60%",
+        }}
+      >
+        <svg viewBox="0 0 520 420" width="520" height="420" style={{ position: "absolute", inset: 0, overflow: "visible" }}>
+          <rect x="40" y="40" width="440" height="340" rx="6" fill="rgba(139,92,246,0.12)" stroke={C.cyan} strokeWidth="5"
+            pathLength={1} strokeDasharray="1" strokeDashoffset={1 - draw} />
+          {[
+            { x: 160, y: 300, w: 200, h: 60, l: "Sofa" },
+            { x: 200, y: 200, w: 120, h: 60, l: "Table" },
+            { x: 170, y: 52, w: 180, h: 40, l: "Storage" },
+          ].map((f, i) => {
+            const p = interpolate(frame, [40 + i * 10, 60 + i * 10], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+            return (
+              <g key={f.l} opacity={p}>
+                <rect x={f.x} y={f.y} width={f.w} height={f.h} rx="12" fill="rgba(165,180,252,0.35)" stroke="rgba(255,255,255,0.6)" strokeWidth="2" />
+                <text x={f.x + f.w / 2} y={f.y + f.h / 2 + 7} textAnchor="middle" fill={C.text} fontSize="20" fontWeight="700" fontFamily={font}>
+                  {f.l}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+        {/* walls rising out of the plan */}
+        {[
+          { left: 40, top: 40, width: 440, rot: 0 },
+          { left: 40, top: 40, width: 340, rot: 90 },
+          { left: 480, top: 40, width: 340, rot: 90 },
+        ].map((w, i) => (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              left: w.left,
+              top: w.top,
+              width: w.width,
+              height: 110,
+              transformOrigin: "0 0",
+              transform: `rotateZ(${w.rot}deg) rotateX(${-walls}deg)`,
+              background: "linear-gradient(180deg, rgba(220,220,245,0.55), rgba(139,92,246,0.25))",
+              borderTop: `3px solid ${C.cyan}`,
+              opacity: rise,
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const RoomScene: React.FC = () => {
+  const vertical = useVertical();
+  return (
+    <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
+      <div style={{ display: "flex", flexDirection: vertical ? "column" : "row", alignItems: "center", gap: vertical ? 50 : 100, padding: vertical ? "0 60px" : "0 120px" }}>
+        <div style={{ display: "grid", gap: 34, maxWidth: 760, justifyItems: vertical ? "center" : "start" }}>
+          <Caption eyebrow="03 · Your room" title="Your room, in 3D." body="Scan it with a LiDAR iPhone. Share it with the room. Decorate it together, on any device." align={vertical ? "center" : "left"} />
+          <div style={{ position: "relative", transform: vertical ? "scale(0.8)" : "scale(0.85)", transformOrigin: vertical ? "50% 0" : "0 0" }}>
+            <ScanIllustration />
+            <div style={{ position: "absolute", top: -6, left: 0, fontFamily: font, fontSize: 20, fontWeight: 600, color: C.faint, padding: "6px 14px", borderRadius: 999, border: `1px solid ${C.stroke}`, background: "rgba(0,0,0,0.3)" }}>
+              Illustration · scanning with RoomPlan
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "grid", gap: 18, justifyItems: "center" }}>
+          <Phone src="clip-scan.mp4" startFrom={s(9)} scale={vertical ? 0.95 : 1.0} delay={20} />
+          <Chip delay={60} color={C.cyan}>Sample room · real app recording</Chip>
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 const Sync: React.FC = () => {
   const vertical = useVertical();
   const frame = useCurrentFrame();
@@ -428,7 +517,7 @@ const Sync: React.FC = () => {
   return (
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", fontFamily: font }}>
       <div style={{ display: "grid", justifyItems: "center", gap: vertical ? 90 : 60, padding: "0 80px" }}>
-        <Caption eyebrow="03 · Sync" title="No server in the middle." body="Every device talks to its own node. The room is a CRDT the nodes sync peer to peer." align="center" />
+        <Caption eyebrow="04 · Sync" title="No server in the middle." body="Every device talks to its own node. The room is a CRDT the nodes sync peer to peer." align="center" />
         <svg viewBox="0 0 1000 340" width={vertical ? 960 : 1300}>
           <rect x="360" y="240" width="280" height="84" rx="24" fill="rgba(139,92,246,0.16)" stroke={C.violet} strokeWidth="2.5" />
           <text x="500" y="276" textAnchor="middle" fill={C.text} fontSize="22" fontWeight="800" fontFamily={font}>
@@ -467,7 +556,7 @@ const Invite: React.FC = () => {
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
       <div style={{ display: "flex", flexDirection: vertical ? "column-reverse" : "row", alignItems: "center", gap: vertical ? 70 : 140, padding: vertical ? "0 60px" : "0 140px" }}>
         <div style={{ display: "grid", gap: 44, maxWidth: 820 }}>
-          <Caption eyebrow="04 · Invite" title="Bring people in." body="A signed invite link or QR code. Viewers look around; editors build with you." align={vertical ? "center" : "left"} />
+          <Caption eyebrow="05 · Invite" title="Bring people in." body="A signed invite link or QR code. Viewers look around; editors build with you." align={vertical ? "center" : "left"} />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16, justifyContent: vertical ? "center" : "flex-start" }}>
             <Chip delay={40} color={C.cyan}>Admin · Editor · Viewer</Chip>
             <Chip delay={64} color={C.violet}>Invite by link or QR</Chip>
@@ -518,6 +607,7 @@ export const Promo: React.FC = () => {
     [T.title, Title],
     [T.scan, Scan],
     [T.build, Build],
+    [T.room, RoomScene],
     [T.sync, Sync],
     [T.invite, Invite],
     [T.end, End],

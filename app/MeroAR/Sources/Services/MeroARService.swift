@@ -286,7 +286,10 @@ public final class MeroARService: @unchecked Sendable {
     /// Same request `admin.uploadBlob` builds (raw octet-stream body,
     /// `context_id` in the query, `{ data: { blob_id, size } }` back), sent on
     /// the SDK transport only to carry ``uploadTimeout``.
-    func uploadWorldMap(_ data: Data) async throws -> String {
+    func uploadWorldMap(_ data: Data) async throws -> String { try await uploadBlob(data) }
+
+    /// Upload bytes into this room's blob space and return the blob id.
+    func uploadBlob(_ data: Data) async throws -> String {
         guard let mero else { throw MeroARError.readsUnavailable }
         let (response, _) = try await mero.http.sendRaw(
             HttpRequest(
@@ -296,7 +299,7 @@ public final class MeroARService: @unchecked Sendable {
                 timeout: Self.uploadTimeout))
         let envelope = try MeroJSON.decode(ApiResponse<BlobRef>.self, from: response)
         guard let blobId = envelope.data?.blobId, !blobId.isEmpty else {
-            throw MeroError.decoding("the relay accepted the world map but returned no blob id")
+            throw MeroError.decoding("the upload was accepted but no blob id came back")
         }
         return blobId
     }
@@ -307,6 +310,48 @@ public final class MeroARService: @unchecked Sendable {
     public func downloadWorldMap(blobId: String) async throws -> Data {
         guard let mero else { throw MeroARError.readsUnavailable }
         return try await mero.admin.getBlob(blobId, contextId: contextId)
+    }
+
+    // MARK: - Room scan (the shared 3D model of the room)
+
+    /// The room's current scan, if one has been published.
+    public func getRoomScan() async throws -> RoomScanRecord? {
+        let value = try await transport.query(contextId: contextId, method: "get_room_scan", args: [:])
+        guard let value, value != .null else { return nil }
+        return try MeroJSON.decode(RoomScanRecord.self, from: try MeroJSON.encode(value))
+    }
+
+    /// Upload the room model (and the USDZ, when there is one) into the room's
+    /// blob space, then record them as the room's scan. Returns the new version.
+    @discardableResult
+    public func publishRoomScan(_ model: RoomModel, usdz: Data? = nil) async throws -> UInt64 {
+        let json = try model.encoded()
+        let jsonBlob = try await uploadBlob(json)
+        var usdzBlob: JSONValue = .null
+        var usdzSize: JSONValue = .null
+        if let usdz {
+            usdzBlob = .string(try await uploadBlob(usdz))
+            usdzSize = .number(Double(usdz.count))
+        }
+        try await transport.execute(
+            contextId: contextId, method: "set_room_scan",
+            args: [
+                "json_blob": .string(jsonBlob), "json_size": .number(Double(json.count)),
+                "usdz_blob": usdzBlob, "usdz_size": usdzSize,
+                "width": .number(Double(model.width)), "length": .number(Double(model.length)),
+                "height": .number(Double(model.height)), "object_count": .number(Double(model.objects.count)),
+                "sample": .bool(model.sample), "scanned_at": .number(Double(Self.ms())),
+            ])
+        return try await getRoomScan()?.version ?? 0
+    }
+
+    /// Remove the room's scan (admin).
+    public func clearRoomScan() async throws { try await write("clear_room_scan") }
+
+    /// Download the room model a scan record names.
+    public func loadRoomModel(_ record: RoomScanRecord) async throws -> RoomModel {
+        guard let mero else { throw MeroARError.readsUnavailable }
+        return try RoomModel.decode(try await mero.admin.getBlob(record.jsonBlob, contextId: contextId))
     }
 
     /// `PUT` path for a world-map upload into this room.

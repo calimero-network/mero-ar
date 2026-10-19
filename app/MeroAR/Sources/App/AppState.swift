@@ -196,13 +196,13 @@ public final class AppState: ObservableObject {
         guard let nodeMero else { return }
         isLoadingRooms = true
         defer { isLoadingRooms = false }
-        guard let appId = await installedAppId(on: nodeMero),
-            let contexts = try? await nodeMero.admin.getContexts()
-        else {
+        let appIds = Set(
+            ((try? await nodeMero.admin.listApplications())?.apps ?? []).filter { $0.package == Self.package }.map(\.id))
+        guard !appIds.isEmpty, let contexts = try? await nodeMero.admin.getContexts() else {
             nodeRooms = []
             return
         }
-        let mine = contexts.contexts.filter { $0.applicationId == appId }
+        let mine = contexts.contexts.filter { appIds.contains($0.applicationId) }
         var rooms: [RoomSummary] = []
         let transport = NodeTransport(mero: nodeMero, nodeURL: nodeURL ?? "")
         for context in mine {
@@ -231,7 +231,12 @@ public final class AppState: ObservableObject {
         defer { isEntering = false }
         do {
             let appId: String
-            if let installed = await installedAppId(on: nodeMero) {
+            if let bundle = ProcessInfo.processInfo.environment["MEROAR_APP_BUNDLE"], !bundle.isEmpty {
+                // Development: a locally built .mpk (a path on the node's own
+                // machine), for a contract newer than the registry's.
+                appId = try await nodeMero.admin.installDevApplication(InstallDevApplicationRequest(path: bundle))
+                    .applicationId
+            } else if let installed = await installedAppId(on: nodeMero) {
                 appId = installed
             } else {
                 guard
@@ -261,7 +266,10 @@ public final class AppState: ObservableObject {
     }
 
     private func installedAppId(on mero: Mero) async -> String? {
-        (try? await mero.admin.listApplications())?.apps.first { $0.package == Self.package }?.id
+        let apps = (try? await mero.admin.listApplications())?.apps ?? []
+        // The newest install of the package (a dev bundle and a registry
+        // install can sit side by side on a development node).
+        return apps.last { $0.package == Self.package }?.id
     }
 
     /// Enter a room from whatever was pasted: an invitation link, a bare

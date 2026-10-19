@@ -9,6 +9,12 @@ sees another member arrive and build, live, over peer-to-peer sync.
     scripts/demo-peer.py --a http://localhost:4301 --b http://localhost:4311 \\
         --context <room id> [--name Leo] [--delay 6]
 
+With --verify-room it builds nothing: it checks that node B received the
+room's 3D scan (the record AND the room model blob, downloadable through the
+room's context) and the same objects at the same positions as node A, and
+exits non-zero otherwise. --bundle installs a locally built .mpk on node B
+first, for a contract newer than the registry's.
+
 Both nodes use the dev admin login (admin / calimero1234, override with
 --user / --password). Standard library only.
 """
@@ -73,6 +79,50 @@ def place(node, context, kind, color, x, z, scale=1.0, content=None):
     }})
 
 
+def create_room(a, bundle, name):
+    """What the app's New room does: app, namespace, open group, context."""
+    if not bundle:
+        raise SystemExit("--create-room needs --bundle")
+    app_id = a.request("POST", "/admin-api/install-dev-application", {"path": bundle})["data"]["applicationId"]
+    ns = a.request("POST", "/admin-api/namespaces", {"applicationId": app_id, "name": name})["data"]["namespaceId"]
+    group = a.request("POST", f"/admin-api/namespaces/{ns}/groups",
+                      {"groupName": name, "visibility": "open"})["data"]["groupId"]
+    params = list(json.dumps({"name": name}).encode())
+    ctx = a.request("POST", "/admin-api/contexts", {"applicationId": app_id, "groupId": group, "name": name,
+                                                    "initializationParams": params})["data"]["contextId"]
+    print(ctx)
+
+
+def positions(node, context):
+    return {o["id"]: (round(o["transform"]["position"]["x"], 3), round(o["transform"]["position"]["z"], 3))
+            for o in node.call(context, "get_objects")}
+
+
+def verify_room(a, b, context):
+    """B has the scan record, can download the room model, and the same items."""
+    scan_a = a.call(context, "get_room_scan")
+    if not scan_a:
+        raise SystemExit("FAIL: node A has no room scan")
+    for _ in range(60):
+        scan_b = b.call(context, "get_room_scan")
+        if scan_b and scan_b.get("jsonBlob") == scan_a["jsonBlob"] and positions(b, context) == positions(a, context):
+            break
+        time.sleep(1)
+    else:
+        raise SystemExit(f"FAIL: node B never converged\n  A: {scan_a} {positions(a, context)}\n"
+                         f"  B: {b.call(context, 'get_room_scan')} {positions(b, context)}")
+    req = urllib.request.Request(
+        f"{b.url}/admin-api/blobs/{scan_b['jsonBlob']}?context_id={context}",
+        headers={"authorization": "Bearer " + b.token})
+    with urllib.request.urlopen(req, timeout=70) as res:
+        room = json.loads(res.read())
+    walls, items = len(room.get("walls", [])), len(room.get("objects", []))
+    if not walls:
+        raise SystemExit("FAIL: node B's copy of the room model has no walls")
+    print(f"OK: node B sees the room (v{scan_b['version']}, sample={scan_b['sample']}, "
+          f"{walls} walls, {items} furniture) and {len(positions(b, context))} items at A's positions")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--a", required=True, help="the room owner's node")
@@ -82,10 +132,19 @@ def main():
     ap.add_argument("--user", default="admin")
     ap.add_argument("--password", default="calimero1234")
     ap.add_argument("--delay", type=float, default=6, help="seconds before the second person starts building")
+    ap.add_argument("--verify-room", action="store_true", help="check B sees A's room scan and items, then exit")
+    ap.add_argument("--bundle", help="a .mpk to install on node B before joining")
+    ap.add_argument("--scale", type=float, default=1.0, help="size multiplier for the objects B places")
+    ap.add_argument("--create-room", metavar="NAME",
+                    help="create a room on node A (from --bundle), print its id and exit")
     args = ap.parse_args()
 
     a = Node(args.a, args.user, args.password)
+    if args.create_room:
+        return create_room(a, args.bundle, args.create_room)
     b = Node(args.b, args.user, args.password)
+    if args.bundle:
+        b.request("POST", "/admin-api/install-dev-application", {"path": args.bundle})
 
     room_group = a.request("GET", f"/admin-api/contexts/{args.context}/group")["data"]
     # A room sits in a subgroup; invitations go through its namespace.
@@ -128,6 +187,8 @@ def main():
             time.sleep(1)
     if not me:
         raise SystemExit("node B's copy of the room never initialised")
+    if args.verify_room:
+        return verify_room(a, b, args.context)
     b.call(args.context, "join", {"username": args.name, "avatar": None, "timestamp": now_ms()})
     a.call(args.context, "grant_editor", {"member": me})
     print(f"{args.name} joined as editor:", me)
@@ -145,7 +206,7 @@ def main():
         })
         if step % 6 == 3 and builds:
             kind, color, x, z, scale = builds.pop(0)
-            place(b, args.context, kind, color, x, z, scale)
+            place(b, args.context, kind, color, x * args.scale ** 0.5, z * args.scale ** 0.5, scale * args.scale)
             print(f"{args.name} placed a {kind}")
         time.sleep(0.6)
 

@@ -32,6 +32,12 @@ public final class ARSessionManager: NSObject, ObservableObject, @preconcurrency
 
     /// Called when the user taps an entity (its object id), or empty space (nil).
     var onSelect: ((String?) -> Void)?
+    /// Dragging isn't offered in live AR (objects are moved with the inspector).
+    var onMove: ((String, SIMD3<Float>) -> Void)?
+
+    /// The live camera shows the real room; the 3D room view draws the scan.
+    func showRoom(_ model: RoomModel?) {}
+    func setFloorPlan(_ on: Bool) {}
 
     public override init() {
         super.init()

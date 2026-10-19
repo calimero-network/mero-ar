@@ -97,6 +97,69 @@ final class MeroARUITests: XCTestCase {
         pause(3)
     }
 
+    /// The sample room, shared: put the sample in a new room, add two items,
+    /// drag one across the floor plan. `scripts/e2e-room-scan.sh` runs this,
+    /// then checks a second node (Leo) sees the room and the items.
+    func testSampleRoomAddAndMoveItems() throws {
+        guard let node = env["MEROAR_TEST_NODE"], let user = env["MEROAR_TEST_USER"], let pass = env["MEROAR_TEST_PASS"]
+        else { throw XCTSkip("set MEROAR_TEST_NODE / _USER / _PASS to run against a node") }
+        let app = XCUIApplication()
+        app.launchArguments += ["-meroar.nodeURL", node, "-meroar.nodeUser", user, "-meroar.username", "Maya"]
+        app.launchEnvironment["MEROAR_PREVIEW"] = "1"
+        if let bundle = env["MEROAR_APP_BUNDLE"] { app.launchEnvironment["MEROAR_APP_BUNDLE"] = bundle }
+        app.launch()
+
+        expect(app.buttons["manualNode"], 10)
+        app.buttons["manualNode"].tap()
+        let password = app.secureTextFields["nodePassField"]
+        expect(password, 5)
+        password.tap()
+        password.typeText(pass)
+        let create = app.buttons["createRoomButton"]
+        signIn(app, password: password, until: create)
+        dismissSavePassword(app)
+        let name = app.textFields["roomNameInput"]
+        tap(create, until: name)
+        name.tap()
+        name.typeText((env["MEROAR_TEST_ROOM"] ?? "Sample room test") + "\n")
+        expect(app.buttons["addObjectButton"], 90, "room did not open")
+        pause(2)
+
+        // The sample room, clearly labelled.
+        let sampleItem = app.buttons["Try a sample room"]
+        tap(app.buttons["addRoomPrompt"], until: sampleItem)
+        sampleItem.tap()
+        let pill = app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Sample room'")).firstMatch
+        expect(pill, 30, "the sample room was not shared")
+        pause(3)
+
+        // Two items.
+        for kind in ["cube", "sphere"] {
+            let place = app.buttons["place-\(kind)"]
+            tap(app.buttons["addObjectButton"], until: place)
+            pause(1)
+            place.tap()
+            pause(1.5)
+        }
+        expect(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '2 objects'")).firstMatch, 20)
+
+        // Floor plan, then drag one item across the floor (the canvas lists
+        // placed objects to accessibility at their on-screen positions).
+        app.buttons["floorPlanButton"].tap()
+        pause(2)
+        let item = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'sceneObject-'")).firstMatch
+        expect(item, 10, "no placed object on the floor plan")
+        let start = item.frame
+        item.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.3, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.42)))
+        pause(3)
+        expect(app.buttons["closeInspectorButton"], 10, "dragging didn't pick the item up")
+        let moved = app.buttons.matching(NSPredicate(format: "identifier == %@", item.identifier)).firstMatch
+        XCTAssertGreaterThan(hypot(moved.frame.midX - start.midX, moved.frame.midY - start.midY), 30, "the item didn't move")
+        app.buttons["closeInspectorButton"].tap()
+        pause(env["MEROAR_HOLD"].flatMap(Double.init) ?? 2)
+    }
+
     // MARK: - Recordings (scripts/record-demo.sh)
 
     private func recordingApp(room: String? = nil) throws -> XCUIApplication {
@@ -106,6 +169,7 @@ final class MeroARUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments += ["-meroar.nodeURL", node, "-meroar.nodeUser", user, "-meroar.username", "Maya"]
         app.launchEnvironment["MEROAR_PREVIEW"] = "1"
+        if let bundle = env["MEROAR_APP_BUNDLE"] { app.launchEnvironment["MEROAR_APP_BUNDLE"] = bundle }
         if let room {
             app.launchEnvironment["MEROAR_NODE"] = node
             app.launchEnvironment["MEROAR_NODE_USER"] = user
@@ -178,6 +242,42 @@ final class MeroARUITests: XCTestCase {
             if app.buttons["closeInspectorButton"].exists { app.buttons["closeInspectorButton"].tap() }
         }
         Thread.sleep(forTimeInterval: 4)
+    }
+
+    /// Scene 4: share the (labelled) sample room in 3D, decorate it, and plan
+    /// it top-down while Leo joins from his node.
+    func testRecordRoomScan() throws {
+        let app = try recordingApp(room: env["MEROAR_ROOM"])
+        expect(app.buttons["addObjectButton"], 60)
+        Thread.sleep(forTimeInterval: 2)
+        let sampleItem = app.buttons["Try a sample room"]
+        tap(app.buttons["addRoomPrompt"], until: sampleItem)
+        Thread.sleep(forTimeInterval: 1)
+        sampleItem.tap()
+        expect(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Sample room'")).firstMatch, 30)
+        Thread.sleep(forTimeInterval: 3)
+        // Orbit to show the room.
+        let canvas = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.62))
+        canvas.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.6)))
+        Thread.sleep(forTimeInterval: 2)
+        for kind in ["cube", "sphere"] {
+            let place = app.buttons["place-\(kind)"]
+            tap(app.buttons["addObjectButton"], until: place)
+            Thread.sleep(forTimeInterval: 1)
+            place.tap()
+            Thread.sleep(forTimeInterval: 2)
+        }
+        Thread.sleep(forTimeInterval: 4)
+        app.buttons["floorPlanButton"].tap()
+        Thread.sleep(forTimeInterval: 2.5)
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'sceneObject-'")).firstMatch
+            .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.3, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.42)))
+        Thread.sleep(forTimeInterval: 3)
+        if app.buttons["closeInspectorButton"].exists { app.buttons["closeInspectorButton"].tap() }
+        Thread.sleep(forTimeInterval: 3)
+        app.buttons["floorPlanButton"].tap()
+        Thread.sleep(forTimeInterval: 5)
     }
 
     /// Scene 3: invite someone.

@@ -27,9 +27,17 @@ mkdir -p "$WORK" "$OUT"
 
 step() { printf '\n\033[1;36m▶  %s\033[0m\n' "$*"; }
 
+# Fresh nodes every run: both must install the exact bundle this run builds
+# (`cargo mero bundle` re-signs, so an older node's release would differ).
 start_node() { # name port
   local home="$WORK/$1" port="$2"
-  if curl -sf "localhost:$port/admin-api/health" >/dev/null 2>&1; then return; fi
+  if [ -f "$WORK/$1.pid" ]; then
+    kill "$(cat "$WORK/$1.pid")" 2>/dev/null || true
+    for _ in $(seq 1 20); do lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 || break; sleep 0.5; done
+  fi
+  if curl -sf "localhost:$port/admin-api/health" >/dev/null 2>&1; then
+    echo "port $port is taken by a node this script didn't start; stop it first" >&2; exit 1
+  fi
   rm -rf "$home"
   printf '%s' "$PASS" | merod --home "$home" --node app init --server-port "$port" --swarm-port $((port + 1)) \
     --auth-mode embedded --auth-storage persistent --admin-user admin --admin-password-stdin >/dev/null
@@ -42,6 +50,10 @@ start_node() { # name port
 step "Nodes"
 start_node node-a 4301
 start_node node-b 4311
+
+step "Contract bundle (this repo's contract: the registry's may predate room scans)"
+(cd "$ROOT" && make logic-bundle >/dev/null)
+BUNDLE="$ROOT/logic/res/mero-ar.mpk"
 
 step "Build for testing"
 cd "$APP_DIR"
@@ -64,6 +76,7 @@ scene() { # name test [extra env...]
   local rec=$!
   sleep 1.5
   env TEST_RUNNER_MEROAR_RECORD=1 TEST_RUNNER_MEROAR_TEST_NODE=http://localhost:4301 \
+    TEST_RUNNER_MEROAR_APP_BUNDLE="$BUNDLE" \
     TEST_RUNNER_MEROAR_TEST_USER=admin TEST_RUNNER_MEROAR_TEST_PASS="$PASS" "$@" \
     xcodebuild test-without-building -project MeroAR.xcodeproj -scheme MeroAR \
     -destination "platform=iOS Simulator,name=$SIM" -derivedDataPath "$DERIVED" \
@@ -111,12 +124,22 @@ EOF
 echo "   room $ROOM"
 
 python3 "$ROOT/scripts/demo-peer.py" --a http://localhost:4301 --b http://localhost:4311 --context "$ROOM" \
-  --name Leo --delay 24 >"$WORK/peer.log" 2>&1 &
+  --bundle "$BUNDLE" --name Leo --delay 24 >"$WORK/peer.log" 2>&1 &
 PEER=$!
 scene clip-room testRecordRoom TEST_RUNNER_MEROAR_ROOM="$ROOM" TEST_RUNNER_MEROAR_TAP_OBJECT="${TAP_OBJECT:-0.775,0.535}"
 wait "$PEER" 2>/dev/null || true
 
 scene clip-invite testRecordInvite TEST_RUNNER_MEROAR_ROOM="$ROOM"
+
+step "A fresh room for the 3D room scene"
+SCAN_ROOM=$(python3 "$ROOT/scripts/demo-peer.py" --a http://localhost:4301 --b http://localhost:4311 \
+  --context new --bundle "$BUNDLE" --create-room "Living room")
+echo "   room $SCAN_ROOM"
+python3 "$ROOT/scripts/demo-peer.py" --a http://localhost:4301 --b http://localhost:4311 --context "$SCAN_ROOM" \
+  --bundle "$BUNDLE" --name Leo --delay 30 --scale 3 >"$WORK/peer-scan.log" 2>&1 &
+PEER=$!
+scene clip-scan testRecordRoomScan TEST_RUNNER_MEROAR_ROOM="$SCAN_ROOM"
+wait "$PEER" 2>/dev/null || true
 
 xcrun simctl status_bar "$SIM" clear >/dev/null || true
 step "Done: $OUT"

@@ -13,6 +13,10 @@ public final class SceneStore: ObservableObject {
     /// ``onlineMembers``.
     @Published public private(set) var presence: [String: Presence] = [:]
     @Published public private(set) var members: [Member] = []
+    /// The room's 3D scan record, and the room model it names once downloaded.
+    @Published public private(set) var roomScan: RoomScanRecord?
+    @Published public private(set) var roomModel: RoomModel?
+    @Published public private(set) var isPublishingScan = false
     /// Notes pinned to points in the room, oldest first.
     @Published public private(set) var comments: [SpatialComment] = []
     @Published public private(set) var roles: [MemberRole] = []
@@ -66,6 +70,50 @@ public final class SceneStore: ObservableObject {
         await refreshRole()
         await refreshRoster()
         await refreshComments()
+        await refreshRoomScan()
+    }
+
+    /// Re-read the room's scan, and download its model when it changed.
+    public func refreshRoomScan() async {
+        guard let record = try? await service.getRoomScan() else {
+            roomScan = nil
+            roomModel = nil
+            return
+        }
+        if record != roomScan || roomModel == nil {
+            roomScan = record
+            if let model = try? await service.loadRoomModel(record) { roomModel = model }
+        }
+    }
+
+    public func clearRoomScan() async {
+        do {
+            try await service.clearRoomScan()
+            roomScan = nil
+            roomModel = nil
+        } catch { lastError = message(error) }
+    }
+
+    /// Move an object to a floor position (from a drag), keeping its turn and size.
+    public func move(id: String, to point: SIMD3<Float>) async {
+        guard var transform = objects[id]?.transform else { return }
+        transform.position = Vec3(Double(point.x), Double(point.y), Double(point.z))
+        await updateTransform(id: id, transform: transform)
+    }
+
+    /// Share a room model (a scan, or the sample) as this room's 3D room.
+    public func publishRoomScan(_ model: RoomModel, usdz: Data? = nil) async -> Bool {
+        isPublishingScan = true
+        defer { isPublishingScan = false }
+        do {
+            try await service.publishRoomScan(model, usdz: usdz)
+            roomModel = model
+            await refreshRoomScan()
+            return true
+        } catch {
+            lastError = message(error)
+            return false
+        }
     }
 
     public func refreshComments() async {
@@ -143,6 +191,8 @@ public final class SceneStore: ObservableObject {
                 await self.refreshRole()
                 await self.refreshRoster()
                 self.room = (try? await self.service.getRoom()) ?? self.room
+            case .roomScanUpdated:
+                await self.refreshRoomScan()
             case .roomUpdated, .anchorsUpdated:
                 self.room = (try? await self.service.getRoom()) ?? self.room
             default:

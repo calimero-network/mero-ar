@@ -59,6 +59,7 @@ export default function App() {
         <Film />
         <HowItWorks />
         <Features />
+        <RoomIn3D />
         <Clips />
         <Honest />
         <Faq />
@@ -93,6 +94,7 @@ function Nav() {
         <nav className="nav-links" aria-label="Sections">
           <a href="#how">How it works</a>
           <a href="#features">Features</a>
+          <a href="#room">Your room</a>
           <a href="#see-it">See it</a>
           <a href="#honest">Limits</a>
           <a href="#faq">FAQ</a>
@@ -216,7 +218,7 @@ function Film() {
       <Reveal>
         <Item className="section-head">
           <span className="eyebrow">The film</span>
-          <h2 id="film-title">Forty seconds of Mero AR.</h2>
+          <h2 id="film-title">Fifty seconds of Mero AR.</h2>
         </Item>
         <Item>
           <div className="film glass">
@@ -396,6 +398,75 @@ function Features() {
   );
 }
 
+const roomSteps = [
+  {
+    icon: <I.Scan />,
+    title: "Scan it",
+    body: "Walk the room with a LiDAR iPhone or iPad. Apple's RoomPlan finds the walls, doors, windows and furniture.",
+  },
+  {
+    icon: <I.Layers />,
+    title: "Share it",
+    body: "The room travels as a small model plus a full USDZ, stored as blobs inside your Mero AR room, so only its members get it.",
+  },
+  {
+    icon: <I.Users />,
+    title: "Decorate it together",
+    body: "Everyone opens the same 3D room on any device, adds and drags items across the floor plan, and sees each other's changes live.",
+  },
+];
+
+function RoomIn3D() {
+  return (
+    <section className="container" id="room" aria-labelledby="room-title">
+      <div className="room-grid">
+        <Reveal>
+          <Item className="section-head">
+            <span className="eyebrow">New · Your room, in 3D</span>
+            <h2 id="room-title">Scan your room. Redecorate it together.</h2>
+            <p className="lede">
+              Turn your real room into a 3D model, share it with the people in your Mero AR room, and plan it together: move
+              the sofa, try a shelf by the window, leave a note by the door. Every edit syncs peer to peer.
+            </p>
+          </Item>
+          <div className="room-steps">
+            {roomSteps.map((st) => (
+              <Item className="room-step glass" key={st.title}>
+                <div className="icon-tile">{st.icon}</div>
+                <div>
+                  <h3>{st.title}</h3>
+                  <p>{st.body}</p>
+                </div>
+              </Item>
+            ))}
+          </div>
+          <Item>
+            <p className="illustration-note">
+              The recording uses Mero AR's built-in sample room in the iOS Simulator, labelled as a sample in the app.
+              Scanning needs a LiDAR device; anyone can view and edit a shared room on any iPhone or iPad.
+            </p>
+          </Item>
+        </Reveal>
+        <Reveal className="room-phone">
+          <Item>
+            <div className="phone">
+              <video
+                src={media("clip-scan.mp4")}
+                poster={media("clip-scan.jpg")}
+                autoPlay
+                muted
+                loop
+                playsInline
+                aria-label="Screen recording: the sample living room shared in 3D, items added and moved on the floor plan"
+              />
+            </div>
+          </Item>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
 const clips = [
   { file: "clip-signin", title: "Sign in", body: "Calimero Cloud with a passkey, or your own node's URL." },
   { file: "clip-room", title: "Build a room", body: "Create a room, add objects, pin a note." },
@@ -514,6 +585,10 @@ const faqs = [
   {
     q: "What happens when two people move the same object?",
     a: "Edits merge as CRDT operations, and the latest move wins. To avoid that, lock an object while you work on it.",
+  },
+  {
+    q: "Can I scan my room without LiDAR?",
+    a: "No. Scanning uses Apple's RoomPlan, which needs a LiDAR iPhone (12 Pro and later Pro models) or iPad. Once someone has scanned a room, everyone can open and edit it on any device, and there's a clearly labelled sample room to try it out.",
   },
   {
     q: "Can someone without the app see the room?",

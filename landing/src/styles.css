@@ -721,3 +721,42 @@ footer {
 .footer-inner a:hover {
   color: var(--text);
 }
+
+/* ── Your room, in 3D ─────────────────────────────────────────────────── */
+
+.room-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 48px;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .room-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.room-steps {
+  display: grid;
+  gap: 12px;
+}
+
+.room-step {
+  display: grid;
+  grid-template-columns: 46px 1fr;
+  gap: 16px;
+  padding: 20px;
+  align-items: start;
+}
+
+.room-step p {
+  margin: 6px 0 0;
+  color: var(--text-dim);
+  font-size: 15px;
+}
+
+.room-phone {
+  display: grid;
+  place-items: center;
+}

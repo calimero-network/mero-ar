@@ -46,6 +46,52 @@ A dark, spatial design of its own: glass panels over the camera, an aurora
   says so; live AR needs an ARKit iPhone or iPad. `MEROAR_PREVIEW=1` forces the
   preview on a device.
 
+### Your room, in 3D
+
+Scan your real room into a 3D model, share it with the people in the Mero AR
+room, and decorate it together.
+
+- **Scan** (Room menu → *Scan this room*): Apple RoomPlan (`RoomCaptureView`),
+  with coaching text, Done, then a review screen with the room in 3D, its size,
+  *Retake* and *Share with the room*. **Needs LiDAR** (iPhone 12 Pro and later
+  Pro models, LiDAR iPads); elsewhere the option is replaced by an explanation.
+- **Share:** the scan becomes a small portable room model (`RoomModel`,
+  `meroar.room/1`: walls, doors, windows, openings and detected objects with
+  category, dimensions and transform, mirroring RoomPlan's `CapturedRoom`) plus
+  the parametric USDZ RoomPlan exports. Both are uploaded as blobs into the
+  room's context, and the contract's `set_room_scan` records them (blob ids,
+  sizes, dimensions, `scanned_by`, `scanned_at`, `version`; one current scan
+  per room, a new one bumps the version). Peers download the model through the
+  room's context, like the `ARWorldMap`.
+- **View and edit:** the 3D room (SceneKit, non-AR, so it renders in the
+  Simulator and on every device) rebuilds walls, floor, door and window
+  frames and the detected furniture (labelled by category). Orbit and zoom, or
+  flip to a top-down **floor plan**. Scene objects live in room coordinates:
+  add them from the library, **drag them across the floor** (snapped to the
+  floor, kept inside the walls), and turn, resize, paint, lock or delete them
+  with the inspector. Everyone's edits sync as before.
+- **Live AR:** with a 3D room shared, the dock offers *3D room*; *Align to my
+  room* shares the AR world map so devices in the same physical room line up.
+- **Try a sample room:** a built-in 5.2 × 4.2 m living room (walls, a door,
+  two windows, sofa, table, chairs, TV, storage), always labelled *Sample
+  room*. It's what the Simulator, the tests and the recordings use, since
+  RoomPlan can't run there. It is not a real scan.
+
+Contract: `set_room_scan`, `get_room_scan`, `clear_room_scan` (admin), event
+`RoomScanUpdated`. The registry's published Mero AR may predate them: for a
+local node, build this repo's contract (`make logic-bundle`) and launch the app
+with `MEROAR_APP_BUNDLE=$PWD/logic/res/mero-ar.mpk` so **New room** installs it.
+
+**End to end on two nodes:** `MERO_BIN=… scripts/e2e-room-scan.sh` runs the
+app (sample room → two items → drag one on the floor plan) on node A, then
+checks node B received the scan record, can download the room model, and has
+both items at A's positions.
+
+**Limits:** scanning needs LiDAR; the Simulator only has the sample room;
+aligning live AR to a shared scan uses ARKit relocalization and has not been
+tested on devices yet; the parametric USDZ is shared but the app renders the
+room from the model, not the USDZ.
+
 ### Run it against a local node
 
 ```bash
@@ -175,6 +221,8 @@ Two more things the same code depends on:
 - ✅ SceneKit 3D preview of the shared room where ARKit isn't available (Simulator, Mac)
 - ✅ ARKit/RealityKit room view: place/sync objects, camera-pose presence, publish + relocalize into a shared `ARWorldMap`
 - 🔵 Cross-device coordinate alignment via persisted `ARWorldMap` — needs on-device validation with two phones
+- ✅ Your room in 3D: RoomPlan scan (LiDAR) or the labelled sample room, shared as blobs + `room_scan` record, 3D room and floor plan, drag on the floor, two-node e2e
+- 🔵 Live AR alignment to a shared room scan — needs on-device validation
 - ⬜ Undo/redo, image objects, dragging objects by touch in AR (next tickets — see `../merointerier.md`)
 - ⬜ No Android client. [kotlin-sdk](https://github.com/calimero-network/kotlin-sdk) exists, but an Android AR app (ARCore) is greenfield work, not a port of this one.
 

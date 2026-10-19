@@ -7,7 +7,7 @@ import { copyFileSync, existsSync } from "node:fs";
 import path from "node:path";
 
 const media = path.resolve("../landing/public/media");
-for (const clip of ["clip-room.mp4", "clip-invite.mp4", "clip-signin.mp4"]) {
+for (const clip of ["clip-room.mp4", "clip-invite.mp4", "clip-signin.mp4", "clip-scan.mp4"]) {
   const from = path.join(media, clip);
   if (!existsSync(from)) throw new Error(`missing ${from}: run scripts/record-demo.sh first`);
   copyFileSync(from, path.resolve("public", clip));

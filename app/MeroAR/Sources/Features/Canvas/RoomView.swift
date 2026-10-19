@@ -45,6 +45,12 @@ protocol RoomCanvas: AnyObject {
     /// Mirror the shared scene.
     func sync(objects: [SceneObject], selected: String?, presence: [Presence], comments: [SpatialComment], me: String)
     var onSelect: ((String?) -> Void)? { get set }
+    /// Called when an object was dragged to a new floor position.
+    var onMove: ((String, SIMD3<Float>) -> Void)? { get set }
+    /// Show the room's 3D scan (nil: none).
+    func showRoom(_ model: RoomModel?)
+    /// Top-down floor plan instead of the orbit view.
+    func setFloorPlan(_ on: Bool)
 }
 
 extension Transform {
@@ -105,6 +111,8 @@ struct RoomEditor<Canvas: View>: View {
     @Binding var status: String
     var shareScan: (() -> Void)?
     var isPublishing = false
+    /// A dock button that swaps between the live camera and the 3D room.
+    var switchView: (title: String, icon: String, action: () -> Void)?
     @ViewBuilder var canvas: Canvas
 
     @State private var selected: String?
@@ -114,6 +122,8 @@ struct RoomEditor<Canvas: View>: View {
     /// When something was last placed or posted: Return can deliver a submit
     /// twice, and the second must not add a duplicate.
     @State private var lastAdd = Date.distantPast
+    @State private var floorPlan = false
+    @State private var showScan = false
 
     var body: some View {
         ZStack {
@@ -128,8 +138,9 @@ struct RoomEditor<Canvas: View>: View {
             }
 
             VStack(spacing: 10) {
-                RoomTopBar(store: store, showMembers: $showMembers)
+                RoomTopBar(store: store, showMembers: $showMembers) { roomMenu }
                 if !isLiveAR { previewBanner }
+                if let model = store.roomModel, !isLiveAR { roomPill(model) }
                 Spacer()
                 if !status.isEmpty { notice(status, icon: "viewfinder", tone: .neutral) }
                 if let error = store.lastError { errorNotice(error) }
@@ -137,6 +148,7 @@ struct RoomEditor<Canvas: View>: View {
                     Inspector(store: store, object: object) { selected = nil }
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 } else {
+                    if store.roomModel == nil && store.canEdit && !isLiveAR { addRoomPrompt }
                     dock.transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
@@ -170,7 +182,24 @@ struct RoomEditor<Canvas: View>: View {
                 Haptics.soft()
                 selected = id
             }
+            controller.onMove = { id, point in
+                Haptics.soft()
+                Task { await store.move(id: id, to: point) }
+            }
+            controller.showRoom(store.roomModel)
             resync()
+        }
+        .onChange(of: store.roomModel) { _, model in
+            controller.showRoom(model)
+            if model == nil { floorPlan = false }
+        }
+        .onChange(of: floorPlan) { _, on in controller.setFloorPlan(on) }
+        .fullScreenCover(isPresented: $showScan) {
+            #if canImport(RoomPlan) && os(iOS)
+            RoomScanFlow(store: store)
+            #else
+            EmptyView()
+            #endif
         }
         .onChange(of: store.sortedObjects) { _, _ in resync() }
         .onChange(of: store.comments) { _, _ in resync() }
@@ -198,6 +227,116 @@ struct RoomEditor<Canvas: View>: View {
         Task { await store.addObject(kind: kind.rawValue, content: content, transform: transform, color: color) }
     }
 
+    // MARK: The 3D room
+
+    /// What can be done with the room's 3D scan.
+    @ViewBuilder private var roomMenu: some View {
+        Menu {
+            if store.canEdit {
+                if RoomScanSupport.isSupported {
+                    Button {
+                        showScan = true
+                    } label: {
+                        Label(store.roomModel == nil ? "Scan this room" : "Rescan this room", systemImage: "camera.metering.matrix")
+                    }
+                } else {
+                    Section(RoomScanSupport.unsupportedReason) {}
+                }
+                Button {
+                    tryTheSampleRoom()
+                } label: {
+                    Label("Try a sample room", systemImage: "sofa")
+                }
+            }
+            if store.roomModel != nil && !isLiveAR {
+                Button {
+                    floorPlan.toggle()
+                } label: {
+                    Label(floorPlan ? "3D view" : "Floor plan", systemImage: floorPlan ? "cube" : "square.split.bottomrightquarter")
+                }
+            }
+            if isLiveAR, store.canEdit, let shareScan {
+                Button(action: shareScan) {
+                    Label("Align to my room", systemImage: "scope")
+                }
+            }
+            if store.isAdmin && store.roomScan != nil {
+                Button(role: .destructive) {
+                    Task { await store.clearRoomScan() }
+                } label: {
+                    Label("Remove the 3D room", systemImage: "trash")
+                }
+            }
+        } label: {
+            Image(systemName: "house.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Theme.text)
+                .frame(width: 44, height: 44)
+                .modifier(Glass(shape: Circle()))
+        }
+        .accessibilityLabel("Room")
+        .accessibilityIdentifier("roomMenuButton")
+    }
+
+    private func tryTheSampleRoom() {
+        guard let sample = RoomModel.sampleLivingRoom() else {
+            store.lastError = "The sample room is missing from this build."
+            return
+        }
+        Haptics.tap()
+        Task {
+            if await store.publishRoomScan(sample) {
+                Haptics.success()
+                status = "Sample room shared with everyone here"
+            }
+        }
+    }
+
+    private func roomPill(_ model: RoomModel) -> some View {
+        let size = String(format: "%.1f × %.1f m", model.width, model.length)
+        let who = store.roomScan.map { store.name(of: $0.scannedBy) } ?? ""
+        return ARChip {
+            Label(
+                model.sample ? "Sample room · \(size)" : "Scanned by \(who) · \(size)",
+                systemImage: model.sample ? "sofa" : "camera.metering.matrix")
+                .font(.system(size: 12.5, weight: .semibold))
+        }
+        .accessibilityIdentifier("roomScanPill")
+    }
+
+    private var addRoomPrompt: some View {
+        Menu {
+            if RoomScanSupport.isSupported {
+                Button {
+                    showScan = true
+                } label: {
+                    Label("Scan this room", systemImage: "camera.metering.matrix")
+                }
+            }
+            Button {
+                tryTheSampleRoom()
+            } label: {
+                Label("Try a sample room", systemImage: "sofa")
+            }
+        } label: {
+            HStack(spacing: 10) {
+                if store.isPublishingScan {
+                    ProgressView().tint(.white)
+                } else {
+                    Image(systemName: "house.fill")
+                }
+                Text(store.isPublishingScan ? "Sharing the room…" : "Add your room in 3D")
+            }
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 11)
+            .background(Capsule().fill(Theme.aurora))
+            .shadow(color: Theme.violet.opacity(0.45), radius: 12, y: 4)
+        }
+        .accessibilityIdentifier("addRoomPrompt")
+    }
+
     private var previewBanner: some View {
         ARChip {
             Label("3D preview · live AR needs an ARKit iPhone or iPad", systemImage: "cube.transparent")
@@ -218,6 +357,14 @@ struct RoomEditor<Canvas: View>: View {
                 dockButton(isPublishing ? "Sharing" : "Share scan", "square.stack.3d.up.fill", id: "shareScanButton") {
                     shareScan()
                 }
+            }
+            if !isLiveAR, store.roomModel != nil {
+                dockButton(floorPlan ? "3D" : "Plan", floorPlan ? "cube.fill" : "square.split.bottomrightquarter.fill", id: "floorPlanButton") {
+                    floorPlan.toggle()
+                }
+            }
+            if let switchView {
+                dockButton(switchView.title, switchView.icon, id: "switchViewButton", action: switchView.action)
             }
             dockButton("People", "person.2.fill", id: "peopleButton") { showMembers = true }
         }
@@ -296,10 +443,11 @@ struct RoomEditor<Canvas: View>: View {
 // MARK: - Top bar
 
 /// Room name, live state, who's here, and leave.
-private struct RoomTopBar: View {
+private struct RoomTopBar<Menu: View>: View {
     @EnvironmentObject private var app: AppState
     @ObservedObject var store: SceneStore
     @Binding var showMembers: Bool
+    @ViewBuilder var menu: Menu
 
     var body: some View {
         HStack(spacing: 10) {
@@ -330,6 +478,8 @@ private struct RoomTopBar: View {
             .accessibilityIdentifier("roomStatus")
 
             Spacer(minLength: 6)
+
+            menu
 
             Button {
                 Haptics.tap()
@@ -447,6 +597,9 @@ private struct Inspector: View {
         .padding(18)
         .glass(cornerRadius: Theme.Radius.dock, strong: true)
         .padding(.horizontal, Theme.gutter)
+        // `.contain` keeps each control's own identifier; a bare identifier on
+        // the panel would replace all of theirs.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("inspector")
     }
 
@@ -610,12 +763,15 @@ private struct CommentsSheet: View {
 struct PreviewRoomCanvas: View {
     @ObservedObject var store: SceneStore
     let service: MeroARService
+    /// In live AR, the way back from the 3D room to the camera.
+    var backToCamera: (() -> Void)?
     @StateObject private var preview = PreviewScene()
     @State private var status = ""
 
     var body: some View {
         RoomEditor(
-            store: store, service: service, controller: preview, isLiveAR: false, status: $status
+            store: store, service: service, controller: preview, isLiveAR: false, status: $status,
+            switchView: backToCamera.map { back in (title: "Camera", icon: "camera.fill", action: back) }
         ) {
             ZStack {
                 SpatialBackground(animated: false)
@@ -654,16 +810,23 @@ struct ARRoomCanvas: View {
     @StateObject private var ar = ARSessionManager()
     @State private var status = "Move your phone slowly to scan the room"
     @State private var isPublishing = false
+    /// Showing the room's 3D scan instead of the camera.
+    @State private var showRoom3D = false
 
     var body: some View {
-        RoomEditor(
-            store: store, service: service, controller: ar, isLiveAR: true, status: $status,
-            shareScan: shareScan, isPublishing: isPublishing
-        ) {
-            ARViewContainer(manager: ar)
+        if showRoom3D {
+            PreviewRoomCanvas(store: store, service: service) { showRoom3D = false }
+        } else {
+            RoomEditor(
+                store: store, service: service, controller: ar, isLiveAR: true, status: $status,
+                shareScan: shareScan, isPublishing: isPublishing,
+                switchView: store.roomModel == nil ? nil : (title: "3D room", icon: "house.fill", action: { showRoom3D = true })
+            ) {
+                ARViewContainer(manager: ar)
+            }
+            .onAppear(perform: setup)
+            .onDisappear { ar.pause() }
         }
-        .onAppear(perform: setup)
-        .onDisappear { ar.pause() }
     }
 
     private func setup() {

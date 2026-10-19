@@ -13,6 +13,8 @@ public final class SceneStore: ObservableObject {
     /// ``onlineMembers``.
     @Published public private(set) var presence: [String: Presence] = [:]
     @Published public private(set) var members: [Member] = []
+    /// Notes pinned to points in the room, oldest first.
+    @Published public private(set) var comments: [SpatialComment] = []
     @Published public private(set) var roles: [MemberRole] = []
     @Published public private(set) var room: RoomInfo?
     /// The caller's effective role — "admin", "editor", or "viewer". Empty until
@@ -63,6 +65,17 @@ public final class SceneStore: ObservableObject {
         } catch { lastError = message(error) }
         await refreshRole()
         await refreshRoster()
+        await refreshComments()
+    }
+
+    public func refreshComments() async {
+        if let all = try? await service.getComments() { comments = all.sorted { $0.createdAt < $1.createdAt } }
+    }
+
+    /// The display name for a member id, else a short id.
+    public func name(of member: String) -> String {
+        if let known = members.first(where: { $0.id == member })?.username, !known.isEmpty { return known }
+        return member.isEmpty ? "Someone" : "Member \(member.prefix(4))"
     }
 
     /// Re-resolve our own role. Fails **closed**: if the call errors we drop to
@@ -118,6 +131,8 @@ public final class SceneStore: ObservableObject {
                 await self.refreshObject(id)
             case .objectDeleted(let id):
                 self.objects[id] = nil
+            case .commentAdded, .commentDeleted:
+                await self.refreshComments()
             case .presenceUpdated:
                 await self.refreshPresence()
             case .memberJoined:
@@ -152,8 +167,8 @@ public final class SceneStore: ObservableObject {
 
     // ── Mutations (optimistic + echo-suppressed) ──────────────────────────────
 
-    public func addObject(kind: String, transform: Transform, color: String) async {
-        let object = SceneObject(id: UUID().uuidString, data: ObjectData(kind: kind),
+    public func addObject(kind: String, content: String? = nil, transform: Transform, color: String) async {
+        let object = SceneObject(id: UUID().uuidString, data: ObjectData(kind: kind, content: content),
                                  transform: transform, color: color, lockedBy: nil,
                                  createdBy: service.memberId,
                                  createdAt: now(), updatedAt: now(), version: 0)
@@ -173,6 +188,41 @@ public final class SceneStore: ObservableObject {
         }
     }
 
+    public func updateColor(id: String, color: String) async {
+        let previous = objects[id]
+        objects[id]?.color = color
+        localEchoes.insert(id)
+        do { try await service.updateColor(id: id, color: color) } catch {
+            objects[id] = previous
+            lastError = message(error)
+        }
+    }
+
+    /// Lock an object so only you can move it, or release it.
+    public func setLocked(id: String, _ locked: Bool) async {
+        let previous = objects[id]
+        objects[id]?.lockedBy = locked ? service.memberId : nil
+        localEchoes.insert(id)
+        do {
+            if locked { try await service.lock(id: id) } else { try await service.unlock(id: id) }
+        } catch {
+            objects[id] = previous
+            lastError = message(error)
+        }
+    }
+
+    /// Whether someone else holds the lock on `id`.
+    public func isLockedByOther(_ id: String) -> Bool {
+        guard let holder = objects[id]?.lockedBy, !holder.isEmpty else { return false }
+        return holder != service.memberId
+    }
+
+    public func deleteComment(id: String) async {
+        comments.removeAll { $0.id == id }
+        do { try await service.deleteComment(id: id) } catch { lastError = message(error) }
+        await refreshComments()
+    }
+
     public func deleteObject(id: String) async {
         let previous = objects[id]
         objects[id] = nil
@@ -186,6 +236,7 @@ public final class SceneStore: ObservableObject {
     public func addComment(text: String, position: Vec3) async {
         do { try await service.addComment(text: text, position: position) }
         catch { lastError = message(error) }
+        await refreshComments()
     }
 
     // ── Roles (admin only; the contract enforces it either way) ───────────────

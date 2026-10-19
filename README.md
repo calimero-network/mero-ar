@@ -4,11 +4,17 @@ Collaborative spatial editing on the [Calimero](https://calimero.network) p2p
 node network — multiple people scan the same room and edit a shared 3D scene,
 with every change synchronized through Mero nodes (Figma-meets-ARKit).
 
+**Landing page:** [`landing/`](landing/), a static site explaining how Mero AR
+works, with real recordings from the app and a promo film. `cd landing && npm
+install && npm run dev`; deploys to Vercel as-is (`landing/vercel.json`).
+
 ```
 logic/      Rust WASM contract (scene graph: objects, transforms, presence, comments, locks, roles)
 app/
-  MeroAR/   SwiftUI + ARKit + RealityKit app
-scripts/    dev-node / dev-node2 / dev-invite / setup
+  MeroAR/   SwiftUI + ARKit + RealityKit app (SceneKit 3D preview where ARKit isn't available)
+landing/    the landing page (Vite + React + Framer Motion), media in landing/public/media
+promo/      the promo film (Remotion), rendered into landing/public/media
+scripts/    dev-node / dev-node2 / dev-invite / setup, record-demo.sh, demo-peer.py
 workflows/  merobox suites (logic-test.yml = 1 node, identity-and-roles.yml = 2 nodes)
 Makefile    every command has a `make` shortcut
 ```
@@ -18,7 +24,44 @@ Built for **Calimero core 0.11.0-rc.89**: the contract pins `calimero-sdk`,
 (`logic/Cargo.toml`, `min-runtime-version` too), and the merobox suites run
 `ghcr.io/calimero-network/merod:0.11.0-rc.89`.
 
-## The iOS app: Cloud sign-in, relay session
+## The iOS app
+
+A dark, spatial design of its own: glass panels over the camera, an aurora
+(violet → cyan) accent, SF Symbols, spring animations and haptics.
+
+- **Sign in** with Calimero Cloud, or **Manually enter node URL** for a node you
+  run (URL + admin username and password).
+- **Your rooms**: on a node session, the node's Mero AR rooms; otherwise the ones
+  you opened before. **New room** (node sessions) installs `com.calimero.mero-ar`
+  from the app registry if needed and creates the room; **Join** takes an invite
+  link or a room ID.
+- **The room**: a tool dock (Add, Notes, Share scan, People); an object library
+  (cube, sphere, arrow, marker, 3D labels, six colours); an inspector for the
+  selected object (move, turn, resize, paint, lock, delete); notes pinned in
+  space; other people's viewpoints; Apple's coaching overlay while scanning.
+- **People**: roles (admin / editor / viewer), editor toggles for admins, and
+  invites as a link or QR code.
+- **No ARKit?** In the Simulator, on a Mac or an older device, the room opens as
+  a **3D preview** (SceneKit, orbit with a finger) with the same tools. The UI
+  says so; live AR needs an ARKit iPhone or iPad. `MEROAR_PREVIEW=1` forces the
+  preview on a device.
+
+### Run it against a local node
+
+```bash
+make node                 # or any merod 0.11.0-rc.89 you run yourself
+make app-run              # Simulator
+```
+
+Then **Manually enter node URL** → `http://localhost:2450` (`make node`'s port),
+username `admin`, password `calimero1234`, and **New room**. In the Simulator
+`localhost` is your Mac; on a phone use the Mac's LAN address. For a second
+person, `make node2` and
+`scripts/demo-peer.py --a <node1> --b <node2> --context <room id>` brings
+"Leo" in from node 2: he joins, gets editor, and builds, over real
+peer-to-peer sync.
+
+### Cloud sign-in, relay session
 
 The Swift client is **not** vendored here: the app depends on
 [calimero-network/swift-sdk](https://github.com/calimero-network/swift-sdk)
@@ -29,8 +72,7 @@ package tracks `branch: master` until they land and a release is cut:
 - [swift-sdk#43](https://github.com/calimero-network/swift-sdk/pull/43) — the core rc.83 wire.
 - [swift-sdk#44](https://github.com/calimero-network/swift-sdk/pull/44) — Cloud sign-in, the account layer and `RelayClient`.
 
-**Sign-in is Cloud only.** There is no node URL, username or password in the
-app. **Continue with Calimero** opens the Calimero wallet in the system sign-in
+**Continue with Calimero Cloud** opens the Calimero wallet in the system sign-in
 sheet (`ASWebAuthenticationSession`); the person approves this device with their
 passkey, and the wallet returns to `meroar://enrol` with a device certificate.
 The SDK verifies it, asks the Cloud manager which relay serves the account, and
@@ -52,10 +94,11 @@ Rooms are entered from the lobby by pasting an invite link (the fleet format,
 the account is already in. A new account with no relay gets one by redeeming
 its first invitation.
 
-The app does not create rooms. A room is a context inside a space (namespace),
-created where the contract is deployed (`make node`, or the web build); the
-phone joins it. Founding a space from the phone (`CloudSignIn.foundNamespace`)
-would also need a context created in it, which is out of scope here.
+On a Cloud session the app does not create rooms: a room is a context inside a
+space (namespace), created on a node (the app's node sign-in, `make node`, or
+the web build); the phone joins it by invitation. On a node session, **New
+room** creates one there: a namespace, an open group in it, and the room's
+context.
 
 ### Building against an unmerged SDK
 
@@ -126,8 +169,29 @@ Two more things the same code depends on:
 - ✅ WASM scene-graph contract (objects + transforms, presence, comments, locking, versioned LWW, world-map blob) — core rc.89, builds + unit-tested
 - ✅ Account identity model: account-attributed writes, account-keyed roles, owner-gated room name, admin lock-breaking — covered by both merobox suites
 - ✅ App on the shared swift-sdk: Cloud sign-in (wallet passkey → device certificate → relay), relay writes/reads, Keychain session resume, live SSE, roles UI
-- ✅ Light Calimero design (the apps' light tokens, SF Symbols, ids behind "Show technical details")
+- ✅ Its own dark spatial design (glass panels, aurora accent, SF Symbols, ids behind "Technical details")
+- ✅ Node sign-in (URL + admin login), room list and room creation on a node, recent rooms
+- ✅ Object library, inspector (move / turn / resize / paint / lock / delete), notes, invites with QR, presence of others
+- ✅ SceneKit 3D preview of the shared room where ARKit isn't available (Simulator, Mac)
 - ✅ ARKit/RealityKit room view: place/sync objects, camera-pose presence, publish + relocalize into a shared `ARWorldMap`
 - 🔵 Cross-device coordinate alignment via persisted `ARWorldMap` — needs on-device validation with two phones
-- ⬜ Spatial comments UI, shared-cursor avatars, lock UX, undo/redo (next tickets — see `../merointerier.md`)
+- ⬜ Undo/redo, image objects, dragging objects by touch in AR (next tickets — see `../merointerier.md`)
 - ⬜ No Android client. [kotlin-sdk](https://github.com/calimero-network/kotlin-sdk) exists, but an Android AR app (ARCore) is greenfield work, not a port of this one.
+
+## Landing page, recordings and promo
+
+- **Landing page:** `landing/` (Vite + React + TypeScript + Framer Motion). `npm
+  run dev` to work on it, `npm run build` for `dist/`. Respects reduced motion and
+  the system light/dark setting.
+- **Recordings:** `MERO_BIN=/path/to/merod-rc89/bin scripts/record-demo.sh` boots
+  two local nodes, drives the app in the "iPhone 18 Pro Max" simulator through
+  the recording UI tests (`testRecord*`), brings a second person in over
+  `scripts/demo-peer.py`, and writes `clip-signin`, `clip-room` and
+  `clip-invite` (`.mp4` + poster `.jpg`) into `landing/public/media/`. They are
+  Simulator recordings, so the room shows as its 3D preview.
+- **Promo film:** `cd promo && npm install && npm run render` renders `promo`
+  (1920×1080) and `promo-vertical` (1080×1920) with Remotion into `promo/out/`,
+  using the recordings above, plus the poster. Compress for the web with
+  `ffmpeg -i out/promo.mp4 -c:v libx264 -crf 28 -preset slow -an -movflags
+  +faststart ../landing/public/media/promo.mp4`. The phone-in-a-room scan shot is
+  motion graphics and is labelled as an illustration.

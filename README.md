@@ -40,7 +40,7 @@ A dark, spatial design of its own: glass panels over the camera, an aurora
   selected object (move, turn, resize, paint, lock, delete); notes pinned in
   space; other people's viewpoints; Apple's coaching overlay while scanning.
 - **People**: roles (admin / editor / viewer), editor toggles for admins, and
-  invites as a link or QR code.
+  invites as a signed link (Share or Copy link).
 - **No ARKit?** In the Simulator, on a Mac or an older device, the room opens as
   a **3D preview** (SceneKit, orbit with a finger) with the same tools. The UI
   says so; live AR needs an ARKit iPhone or iPad. `MEROAR_PREVIEW=1` forces the
@@ -217,7 +217,7 @@ Two more things the same code depends on:
 - ✅ App on the shared swift-sdk: Cloud sign-in (wallet passkey → device certificate → relay), relay writes/reads, Keychain session resume, live SSE, roles UI
 - ✅ Its own dark spatial design (glass panels, aurora accent, SF Symbols, ids behind "Technical details")
 - ✅ Node sign-in (URL + admin login), room list and room creation on a node, recent rooms
-- ✅ Object library, inspector (move / turn / resize / paint / lock / delete), notes, invites with QR, presence of others
+- ✅ Object library, inspector (move / turn / resize / paint / lock / delete), notes, invite links, presence of others
 - ✅ SceneKit 3D preview of the shared room where ARKit isn't available (Simulator, Mac)
 - ✅ ARKit/RealityKit room view: place/sync objects, camera-pose presence, publish + relocalize into a shared `ARWorldMap`
 - 🔵 Cross-device coordinate alignment via persisted `ARWorldMap` — needs on-device validation with two phones

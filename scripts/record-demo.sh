@@ -67,6 +67,19 @@ DERIVED="$WORK/derived"
 xcodebuild build-for-testing -project MeroAR.xcodeproj -scheme MeroAR -destination "platform=iOS Simulator,name=$SIM" \
   -derivedDataPath "$DERIVED" -quiet
 
+# Seconds into a raw recording where the app first shows. The home screen is
+# bright (mean luma ~120+), the launch screen flat black (brightest pixel ~21);
+# the app is dark with highlights. Sampled every half second; two app-looking
+# samples in a row, so the crossfade between them doesn't count.
+app_start() {
+  ffprobe -v error -f lavfi -i "movie=$1,fps=2,scale=160:-2,signalstats" \
+    -show_entries frame=pts_time:frame_tags=lavfi.signalstats.YAVG,lavfi.signalstats.YHIGH -of csv=p=0 2>/dev/null |
+    awk -F, '{ app = ($2 > 28 && $2 < 100 && $3 > 45) }
+             app && prev { print t; found = 1; exit }
+             { prev = app; t = $1 }
+             END { if (!found) print 9 }'
+}
+
 scene() { # name test [extra env...]
   local name="$1" test="$2"; shift 2
   step "Scene: $name"
@@ -84,9 +97,10 @@ scene() { # name test [extra env...]
   kill -INT "$rec"; wait "$rec" 2>/dev/null || true
   # Trim the test runner's launch, scale to a web size, no audio, fast start.
   # Cut the launch off the front and the return to the home screen off the end.
-  local raw_length
+  local raw_length start
   raw_length=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$raw")
-  ffmpeg -y -loglevel error -ss "${TRIM:-9}" -t "$(echo "$raw_length - ${TRIM:-9} - ${TAIL:-2}" | bc -l)" -i "$raw" -vf "scale=590:-2,fps=30" -c:v libx264 -profile:v high \
+  start=${TRIM:-$(app_start "$raw")}
+  ffmpeg -y -loglevel error -ss "$start" -t "$(echo "$raw_length - $start - ${TAIL:-2}" | bc -l)" -i "$raw" -vf "scale=590:-2,fps=30" -c:v libx264 -profile:v high \
     -pix_fmt yuv420p -crf 30 -preset slow -an -movflags +faststart "$OUT/$name.mp4"
   # Poster: a frame 40% in, past the launch and before the last screen.
   local length

@@ -403,7 +403,7 @@ const Build: React.FC = () => {
   return (
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
       <div style={{ display: "flex", flexDirection: vertical ? "column" : "row", alignItems: "center", gap: vertical ? 70 : 140, padding: vertical ? "0 60px" : "0 140px" }}>
-        <Phone src="clip-room.mp4" startFrom={s(9)} scale={vertical ? 1.05 : 1.04} />
+        <Phone src="clip-room.mp4" startFrom={s(5.5)} scale={vertical ? 1.05 : 1.04} />
         <div style={{ display: "grid", gap: 44, maxWidth: 820 }}>
           <Caption eyebrow="02 · Build" title="Place it. Together." body="Cubes, spheres, labels and notes. Move, turn, paint and lock them, and everyone sees it at once." align={vertical ? "center" : "left"} />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16, justifyContent: vertical ? "center" : "flex-start" }}>
@@ -497,7 +497,7 @@ const RoomScene: React.FC = () => {
           </div>
         </div>
         <div style={{ display: "grid", gap: 18, justifyItems: "center" }}>
-          <Phone src="clip-scan.mp4" startFrom={s(9)} scale={vertical ? 0.95 : 1.0} delay={20} />
+          <Phone src="clip-scan.mp4" startFrom={s(8)} scale={vertical ? 0.95 : 1.0} delay={20} />
           <Chip delay={60} color={C.cyan}>Sample room · real app recording</Chip>
         </div>
       </div>
@@ -556,13 +556,13 @@ const Invite: React.FC = () => {
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
       <div style={{ display: "flex", flexDirection: vertical ? "column-reverse" : "row", alignItems: "center", gap: vertical ? 70 : 140, padding: vertical ? "0 60px" : "0 140px" }}>
         <div style={{ display: "grid", gap: 44, maxWidth: 820 }}>
-          <Caption eyebrow="05 · Invite" title="Bring people in." body="A signed invite link or QR code. Viewers look around; editors build with you." align={vertical ? "center" : "left"} />
+          <Caption eyebrow="05 · Invite" title="Bring people in." body="Share a signed invite link. Viewers look around; editors build with you." align={vertical ? "center" : "left"} />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16, justifyContent: vertical ? "center" : "flex-start" }}>
             <Chip delay={40} color={C.cyan}>Admin · Editor · Viewer</Chip>
-            <Chip delay={64} color={C.violet}>Invite by link or QR</Chip>
+            <Chip delay={64} color={C.violet}>Share or copy the invite link</Chip>
           </div>
         </div>
-        <Phone src="clip-invite.mp4" startFrom={s(5)} scale={vertical ? 1.05 : 1.04} />
+        <Phone src="clip-invite.mp4" startFrom={s(1.5)} scale={vertical ? 1.05 : 1.04} />
       </div>
     </AbsoluteFill>
   );

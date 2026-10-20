@@ -1,4 +1,3 @@
-import CoreImage.CIFilterBuiltins
 import SwiftUI
 
 /// Who's in the room and what they may do, plus invitations.
@@ -47,28 +46,38 @@ struct MembersSheet: View {
                     }
                 }
                 if let link = inviteLink {
-                    HStack(alignment: .center, spacing: 16) {
-                        QRCode(text: link)
-                            .frame(width: 112, height: 112)
-                            .accessibilityIdentifier("inviteQRCode")
-                        VStack(spacing: 10) {
-                            ShareLink(item: link) {
-                                ButtonLabel(title: "Share", icon: "square.and.arrow.up")
-                            }
-                            .buttonStyle(PrimaryButtonStyle(height: 46))
-                            .accessibilityIdentifier("shareInviteButton")
-                            Button {
-                                #if canImport(UIKit) && os(iOS)
-                                UIPasteboard.general.string = link
-                                #endif
-                                Haptics.success()
-                                copied = true
-                            } label: {
-                                ButtonLabel(title: copied ? "Copied" : "Copy link", icon: copied ? "checkmark" : "doc.on.doc")
-                            }
-                            .buttonStyle(GlassButtonStyle(height: 46))
-                            .accessibilityIdentifier("copyInviteButton")
+                    HStack(spacing: 10) {
+                        Image(systemName: "link").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accent)
+                        Text(link)
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundStyle(Theme.textDim)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.black.opacity(0.25)))
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Invite link")
+                    .accessibilityIdentifier("inviteLink")
+                    HStack(spacing: 10) {
+                        ShareLink(item: link) {
+                            ButtonLabel(title: "Share", icon: "square.and.arrow.up")
                         }
+                        .buttonStyle(PrimaryButtonStyle(height: 46))
+                        .accessibilityIdentifier("shareInviteButton")
+                        Button {
+                            #if canImport(UIKit) && os(iOS)
+                            UIPasteboard.general.string = link
+                            #endif
+                            Haptics.success()
+                            copied = true
+                        } label: {
+                            ButtonLabel(title: copied ? "Copied" : "Copy link", icon: copied ? "checkmark" : "doc.on.doc")
+                        }
+                        .buttonStyle(GlassButtonStyle(height: 46))
+                        .accessibilityIdentifier("copyInviteButton")
                     }
                 } else {
                     Button {
@@ -216,33 +225,5 @@ struct MembersSheet: View {
 
     static func shortId(_ id: String) -> String {
         id.count > 12 ? "\(id.prefix(6))…\(id.suffix(4))" : id
-    }
-}
-
-/// A QR code for a link, white on the glass.
-struct QRCode: View {
-    let text: String
-
-    var body: some View {
-        Group {
-            if let image = Self.render(text) {
-                Image(decorative: image, scale: 1)
-                    .interpolation(.none)
-                    .resizable()
-                    .scaledToFit()
-                    .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.white))
-            } else {
-                Image(systemName: "qrcode").font(.system(size: 40)).foregroundStyle(Theme.textFaint)
-            }
-        }
-    }
-
-    static func render(_ text: String) -> CGImage? {
-        let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(text.utf8)
-        filter.correctionLevel = "M"
-        guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: 8, y: 8)) else { return nil }
-        return CIContext().createCGImage(output, from: output.extent)
     }
 }

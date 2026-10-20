@@ -372,7 +372,7 @@ const features = [
   { icon: <I.Lock />, title: "Locks", body: "Lock an object while you work on it. Nobody else can move it until you let go." },
   { icon: <I.Note />, title: "Notes in space", body: "Pin a note next to an object, like \"sofa goes here\", for whoever walks the room next." },
   { icon: <I.Users />, title: "Roles", body: "The room's creator is its admin. Invite people as viewers and promote them to editors when they should build." },
-  { icon: <I.Link />, title: "Invite by link or QR", body: "An invite is a signed link. Share it, or show the QR code to the person next to you." },
+  { icon: <I.Link />, title: "Invite by link", body: "An invite is a signed link. Share it from the system share sheet, or copy it into any chat." },
   { icon: <I.Eye />, title: "3D preview anywhere", body: "No ARKit device at hand? The same shared room opens as an orbitable 3D preview, tools included." },
 ];
 
@@ -470,7 +470,7 @@ function RoomIn3D() {
 const clips = [
   { file: "clip-signin", title: "Sign in", body: "Calimero Cloud with a passkey, or your own node's URL." },
   { file: "clip-room", title: "Build a room", body: "Create a room, add objects, pin a note." },
-  { file: "clip-invite", title: "Invite people", body: "Mint a signed invite and share it as a link or QR code." },
+  { file: "clip-invite", title: "Invite people", body: "Mint a signed invite link, then share or copy it." },
 ];
 
 function Clips() {

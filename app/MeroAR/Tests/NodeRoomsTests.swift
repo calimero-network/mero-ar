@@ -66,6 +66,22 @@ final class NodeRoomsTests: XCTestCase {
         XCTAssertNil(app.roomsError, "a successful listing should clear the error")
     }
 
+    /// Pull-to-refresh is cancelled when the lobby is replaced on entering a
+    /// room; coming back must not show a listing failure that never happened.
+    func testACancelledLoadIsNotReportedAsAFailure() async {
+        stubListing()
+        let app = makeApp()
+        await signIn(app)
+
+        RelayStub.on("GET", "/admin-api/applications", status: 500, json: #"{"error":"boom"}"#)
+        let load = Task { await app.loadNodeRooms() }
+        load.cancel()
+        await load.value
+        XCTAssertNil(app.roomsError, "a cancelled load was reported as a failed listing")
+        XCTAssertEqual(app.nodeRooms.map(\.id), [roomId])
+        XCTAssertFalse(app.isLoadingRooms)
+    }
+
     func testANodeWithoutTheAppIsGenuinelyEmpty() async {
         RelayStub.on("GET", "/admin-api/applications", json: #"{"data":{"apps":[]}}"#)
         let app = makeApp()

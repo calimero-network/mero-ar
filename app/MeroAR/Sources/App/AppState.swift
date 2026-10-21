@@ -233,7 +233,9 @@ public final class AppState: ObservableObject {
                 appIds.contains($0.applicationId)
             }
         } catch {
-            guard load == roomsLoad, self.nodeMero === nodeMero else { return }
+            // A cancelled load (pull-to-refresh torn down as the lobby is
+            // replaced) didn't fail: it says nothing about the node.
+            guard load == roomsLoad, self.nodeMero === nodeMero, !Task.isCancelled else { return }
             roomsError = userMessage(error)
             return
         }

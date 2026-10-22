@@ -85,7 +85,7 @@ public enum FurnitureItem: String, CaseIterable, Identifiable, Codable {
         case .rug: return SIMD3(2.0, 0.013, 1.4)
         case .tv: return SIMD3(1.6, 1.29, 0.45)
         case .wallTV: return SIMD3(1.45, 1.82, 0.05)
-        case .picture: return SIMD3(0.7, 1.7, 0.04)
+        case .picture: return SIMD3(0.7, 1.7, 0.06)
         }
     }
 

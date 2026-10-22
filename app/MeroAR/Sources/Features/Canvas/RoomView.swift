@@ -75,6 +75,15 @@ extension Transform {
         return t
     }
 
+    /// How furniture is placed: upright, at real size (scale 1), where the
+    /// placement landed — on the floor (y = 0) unless `keepHeight` (live AR,
+    /// where the camera found a surface).
+    func standing(keepHeight: Bool) -> Transform {
+        var p = position
+        if !keepHeight { p.y = 0 }
+        return .at(p)
+    }
+
     /// An identity transform at `position`.
     static func at(_ position: Vec3) -> Transform {
         Transform(position: position, rotation: Quat(0, 0, 0, 1), scale: Vec3(1, 1, 1))
@@ -281,11 +290,7 @@ struct RoomEditor<Canvas: View>: View {
     /// Furniture stands upright at real size: on the floor in the 3D room, at
     /// the surface the camera found in live AR. Not the ×3 the preview gives
     /// tabletop shapes.
-    private func standing(_ transform: Transform) -> Transform {
-        var position = transform.position
-        if !isLiveAR { position.y = 0 }
-        return .at(position)
-    }
+    private func standing(_ transform: Transform) -> Transform { transform.standing(keepHeight: isLiveAR) }
 
     // MARK: The 3D room
 
@@ -721,7 +726,7 @@ private struct ObjectLibrary: View {
                 Eyebrow(text: "Furniture")
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(FurnitureItem.allCases) { piece in
-                        tile(title: piece.title, symbol: piece.symbol, tint: Theme.text, id: "place-\(piece.rawValue)") {
+                        tile(title: piece.title, symbol: piece.symbol, tint: Theme.text, id: "place-furniture-\(piece.rawValue)") {
                             place(.furniture(piece))
                         }
                     }

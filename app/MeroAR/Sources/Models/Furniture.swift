@@ -81,8 +81,8 @@ public enum FurnitureItem: String, CaseIterable, Identifiable, Codable {
         case .bed: return SIMD3(1.6, 1.0, 2.1)
         case .shelf: return SIMD3(0.9, 1.8, 0.35)
         case .lamp: return SIMD3(0.4, 1.6, 0.4)
-        case .plant: return SIMD3(0.5, 1.15, 0.5)
-        case .rug: return SIMD3(2.0, 0.01, 1.4)
+        case .plant: return SIMD3(0.6, 1.15, 0.5)
+        case .rug: return SIMD3(2.0, 0.013, 1.4)
         case .tv: return SIMD3(1.6, 1.29, 0.45)
         case .wallTV: return SIMD3(1.45, 1.82, 0.05)
         case .picture: return SIMD3(0.7, 1.7, 0.04)
@@ -174,7 +174,7 @@ public enum FurnitureItem: String, CaseIterable, Identifiable, Codable {
                 P(.cylinder, SIMD3(0.36, 0.35, 0.36), at: SIMD3(0, 0.175, 0), .primary),
                 P(.cylinder, SIMD3(0.34, 0.02, 0.34), at: SIMD3(0, 0.35, 0), .dark),
                 P(.sphere, SIMD3(0.5, 0.5, 0.5), at: SIMD3(0, 0.68, 0), .leaf),
-                P(.sphere, SIMD3(0.4, 0.4, 0.4), at: SIMD3(0.12, 0.88, 0.05), .leaf),
+                P(.sphere, SIMD3(0.4, 0.4, 0.4), at: SIMD3(0.1, 0.88, 0.05), .leaf),
                 P(.sphere, SIMD3(0.36, 0.36, 0.36), at: SIMD3(-0.1, 0.97, -0.05), .leaf),
             ]
         case .rug:
@@ -213,6 +213,20 @@ public enum FurnitureItem: String, CaseIterable, Identifiable, Codable {
             FurniturePart(.box, SIMD3(w - 0.14, h - 0.14, 0.005), at: SIMD3(0, 1.45, 0.024), .art),
         ]
     }
+
+    /// Every object category RoomPlan reports (`CapturedRoom.Object.Category`,
+    /// as `String(describing:)` spells it).
+    public static let scanCategories: [String] = [
+        "storage", "refrigerator", "stove", "bed", "sink", "washerDryer", "toilet", "bathtub", "oven",
+        "dishwasher", "table", "sofa", "chair", "fireplace", "television", "stairs",
+    ]
+
+    /// The categories that are part of the room itself and never become
+    /// movable furniture.
+    public static let scanFixtures: Set<String> = [
+        "refrigerator", "stove", "sink", "washerDryer", "toilet", "bathtub", "oven", "dishwasher", "fireplace",
+        "stairs",
+    ]
 
     /// The catalogue piece a RoomPlan category becomes when scanned furniture
     /// is made movable, or nil for fixtures that stay part of the room (sinks,

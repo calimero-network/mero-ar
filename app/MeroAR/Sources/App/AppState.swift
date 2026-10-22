@@ -186,7 +186,6 @@ public final class AppState: ObservableObject {
             _ = try await mero.authenticate(Credentials(username: username, password: password))
             nodeMero = mero
             nodeURL = urlString
-            if displayName.isEmpty { displayName = username }
             phase = .lobby
             await loadHomes()
         } catch {

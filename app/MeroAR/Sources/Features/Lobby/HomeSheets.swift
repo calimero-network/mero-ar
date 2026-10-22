@@ -44,6 +44,7 @@ struct InviteLinkCard: View {
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.black.opacity(0.25)))
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("Invite link")
+                    .accessibilityValue(link)
                     .accessibilityIdentifier("inviteLink")
                     HStack(spacing: 10) {
                         ShareLink(item: link) {

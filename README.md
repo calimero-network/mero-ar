@@ -150,6 +150,24 @@ the web build); the phone joins it by invitation. On a node session, **New
 room** creates one there: a namespace, an open group in it, and the room's
 context.
 
+### Tests without a node
+
+Debug builds carry `FixtureNode` (`Sources/Debug/`): an in-memory node with
+Mero AR's contract, answering the admin API, JSON-RPC and blobs as a
+`URLProtocol`. The app's real code runs against it with no network.
+
+- **`AppFlowTests`** (unit): two people on one fixture. They cover homes and
+  rooms, home and room invitations (including a forged one), roles and edit
+  grants, locks, objects, notes, the shared 3D room and world map, nicknames
+  and sign-out.
+- **`FixtureUITests`** (UI): the app launched with `MEROAR_FIXTURE=1`. One
+  person goes through every screen: nickname, new home, objects, label, sample
+  3D room, floor plan, inspector, notes, People and a second room. A second
+  person, played by relaunching as someone else, joins by link, sees the room
+  view-only, is made an editor, and adds an object.
+
+`make app-test` runs them along with the rest.
+
 ### Building against an unmerged SDK
 
 To try an SDK change that isn't released yet, build against a local checkout:

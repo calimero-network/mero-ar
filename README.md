@@ -123,8 +123,8 @@ first time.
 
 The Swift client is **not** vendored here: the app depends on
 [calimero-network/swift-sdk](https://github.com/calimero-network/swift-sdk)
-(`MeroKit` + `MeroKitUI`), declared in `app/MeroAR/project.yml` and pinned by
-revision to the SDK's Calimero 1.0 cutover (swift-sdk#85) until it is released.
+(`MeroKit` + `MeroKitUI`), declared in `app/MeroAR/project.yml` and pinned to
+the SDK's Calimero 1.0 release, v0.5.0 (`exactVersion`).
 
 The app first verifies the node's TDX quote (`GET /attestation`, against signed
 mero-tee releases) and opens the sealed channel; everything else goes through

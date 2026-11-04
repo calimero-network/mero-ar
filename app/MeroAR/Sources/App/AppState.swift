@@ -116,7 +116,7 @@ public final class AppState: ObservableObject {
     public var cluster: RoomCluster? {
         if let fixture { return fixture }
         guard client.isAuthenticated, let cloud = client.cloud else { return nil }
-        return CloudCluster(client: cloud)
+        return CloudCluster(client: cloud, passkey: client.passkeyForNode(), endpoint: client.nodeURL ?? "")
     }
 
     /// Signed in to a development cluster (mock attestation trusted).

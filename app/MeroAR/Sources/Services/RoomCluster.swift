@@ -95,13 +95,21 @@ extension RoomCluster {
 public struct CloudCluster: RoomCluster {
     public let client: CalimeroClient
     public let package: String
+    /// The passkey the account signed in with; minting an invite is a
+    /// step-up the node asks that passkey to sign.
+    public let passkey: (any PasskeyProvider)?
+    /// The node this session signed in to.
+    public let endpoint: String
 
-    public init(client: CalimeroClient, package: String = AppState.package) {
+    public init(
+        client: CalimeroClient, passkey: (any PasskeyProvider)?, endpoint: String,
+        package: String = AppState.package
+    ) {
         self.client = client
+        self.passkey = passkey
+        self.endpoint = endpoint
         self.package = package
     }
-
-    public var endpoint: String { client.nodeUrls.first ?? "" }
 
     public func view(app: String, method: String, args: [String: JSONValue]) async throws -> JSONValue? {
         try await client.view(app, method, .object(args)).result.flatMap { $0 == .null ? nil : $0 }
@@ -174,7 +182,8 @@ public struct CloudCluster: RoomCluster {
     }
 
     public func invite(toHome homeId: String) async throws -> String {
-        try await client.invite(homeId, role: .member)
+        guard let passkey else { throw MeroARError.notSignedIn }
+        return try await client.invite(homeId, role: .member, passkey: passkey)
     }
 
     public func redeem(token: String) async throws {

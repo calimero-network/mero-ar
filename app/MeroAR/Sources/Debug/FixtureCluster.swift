@@ -156,7 +156,11 @@ final class FixtureCluster: RoomCluster, @unchecked Sendable {
     func call(app: String, method: String, args: [String: JSONValue]) async throws -> JSONValue? {
         try locked {
             let index = try roomIndex(app)
-            let out = try Self.call(method, .object(args), room: &Self.state.rooms[index], caller: account)
+            // Work on a copy: an `inout` into `Self.state` would hold the whole
+            // state exclusively, and `now()` bumps `Self.state.clock` mid-call.
+            var room = Self.state.rooms[index]
+            let out = try Self.call(method, .object(args), room: &room, caller: account)
+            Self.state.rooms[index] = room
             return out == .null ? nil : out
         }
     }
